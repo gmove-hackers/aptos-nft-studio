@@ -17,6 +17,10 @@ const NavList = [
     link: "/create-collection",
   },
   {
+    name: "My NFTs",
+    link: "/my-nfts",
+  },
+  {
     name: "Craft NFT",
     link: "/craft-nft",
   },

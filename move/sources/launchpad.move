@@ -125,6 +125,11 @@ module launchpad_addr::launchpad {
         collection_owner_obj: Object<CollectionOwnerObjConfig>
     }
 
+    /// Unique per collection
+    struct CollectionNftCounter has key {
+        nfts: u64
+    }
+
     /// A struct holding items to control properties of a token
     struct TokenController has key {
         extend_ref: object::ExtendRef,
@@ -290,11 +295,11 @@ module launchpad_addr::launchpad {
             }
         );
 
-        // TODO: where to store this really?
         move_to(collection_obj_signer, CombinationRules { results: simple_map::create() });
 
-        // TODO: where to store this really?
         move_to(collection_obj_signer, EvolutionRules { results: simple_map::create() });
+        move_to(collection_obj_signer, CollectionNftCounter { nfts: 0 });
+
 
         assert!(
             option::is_some(&allowlist) || option::is_some(&public_mint_start_time),
@@ -361,7 +366,7 @@ module launchpad_addr::launchpad {
         token_name: String,
         collection_obj: Object<Collection>,
         amount: u64
-    ) acquires CollectionConfig, CollectionOwnerObjConfig, Config {
+    ) acquires CollectionConfig, CollectionOwnerObjConfig, Config, CollectionNftCounter {
         let sender_addr = signer::address_of(sender);
 
         let stage_idx = &mint_stage::execute_earliest_stage(
@@ -416,6 +421,8 @@ module launchpad_addr::launchpad {
             &object::generate_signer_for_extending(
                 &main_collection_owner_config.extend_ref
             );
+        // let secondary_nft_counter = borrow_global_mut<CollectionNftCounter>(object::object_address(&secondary_collection_obj));
+            
 
         let main_uri = token::uri(main_nft);
         // This copies the current description ane name from the main_nft
@@ -472,6 +479,9 @@ module launchpad_addr::launchpad {
             mutator_ref: _ // destroy the mutator ref too
         } = move_from<TokenController>(secondary_token_address);
         token::burn(burn_ref);
+
+        // secondary_nft_counter.nfts = secondary_nft_counter.nfts - 1;
+
 
         event::emit(
             CombineNftsEvent {
@@ -696,6 +706,18 @@ module launchpad_addr::launchpad {
         (start_time, end_time)
     }
 
+    
+    #[view]
+    /// Get the number of NFT's in collection (= minted - burned)
+    public fun get_number_active_nfts(
+        collection_obj: Object<Collection>
+    ): u64 acquires CollectionNftCounter {
+        let nft_counter = borrow_global<CollectionNftCounter>(object::object_address(&collection_obj));
+        nft_counter.nfts
+    }
+
+    
+
     // ================================= Helpers ================================= //
 
     /// Check if sender is admin or owner of the object when package is published to object
@@ -832,9 +854,10 @@ module launchpad_addr::launchpad {
         token_name: String,
         sender_addr: address,
         collection_obj: Object<Collection>
-    ): Object<Token> acquires CollectionConfig, CollectionOwnerObjConfig {
+    ): Object<Token> acquires CollectionConfig, CollectionOwnerObjConfig, CollectionNftCounter {
         let collection_config =
             borrow_global<CollectionConfig>(object::object_address(&collection_obj));
+        let nft_counter = borrow_global_mut<CollectionNftCounter>(object::object_address(&collection_obj));
 
         let collection_owner_obj = collection_config.collection_owner_obj;
         let collection_owner_config =
@@ -844,7 +867,8 @@ module launchpad_addr::launchpad {
         let collection_owner_obj_signer =
             &object::generate_signer_for_extending(&collection_owner_config.extend_ref);
 
-        let next_nft_id = *option::borrow(&collection::count(collection_obj)) + 1;
+        let next_nft_id = nft_counter.nfts + 1;
+        // let next_nft_id = *option::borrow(&collection::count(collection_obj)) + 1;
 
         let collection_uri = collection::uri(collection_obj);
         let nft_metadata_uri = construct_nft_metadata_uri(&collection_uri, next_nft_id);
@@ -871,6 +895,7 @@ module launchpad_addr::launchpad {
             &object_signer,
             TokenController { extend_ref, burn_ref, mutator_ref }
         );
+        nft_counter.nfts = nft_counter.nfts + 1;
 
         // Get the object address of the newly created NFT
         let nft_obj = object::object_from_constructor_ref(constructor_ref);
@@ -913,7 +938,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, Config, CollectionConfig, CollectionOwnerObjConfig {
+    ) acquires Registry, Config, CollectionConfig, CollectionOwnerObjConfig, CollectionNftCounter {
         let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(aptos_framework);
 
         let user1_addr = signer::address_of(user1);
@@ -955,7 +980,7 @@ module launchpad_addr::launchpad {
         aptos_coin::mint(aptos_framework, user1_addr, mint_fee);
 
         let nft_name = string::utf8(b"Sword");
-        mint_nft(nft_name, user1, collection_1, 1);
+        mint_nft(user1, nft_name, collection_1, 1);
 
         let nft = mint_nft_internal(nft_name, user1_addr, collection_1);
         assert!(
@@ -1027,7 +1052,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, TokenController {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, TokenController, CollectionNftCounter {
 
         let sword = string::utf8(b"Sword");
         let fire = string::utf8(b"Fire");
@@ -1085,10 +1110,15 @@ module launchpad_addr::launchpad {
             option::some(2),
             option::some(10)
         );
+        
 
         let registry = get_registry();
         let collection_1 = *vector::borrow(&registry, 0);
+
+
         let nft1_1 = mint_nft_internal(sword, user1_addr, collection_1);
+
+
         assert!(
             token::uri(nft1_1)
                 == string::utf8(b"https://gateway.irys.xyz/manifest_id/1.json"),
@@ -1111,8 +1141,17 @@ module launchpad_addr::launchpad {
         assert!(token::name(nft1_1) == sword, 2);
         assert!(token::name(nft2_1) == fire, 3);
 
+        assert!(get_number_active_nfts(collection_1) == 1, 90);
+        assert!(get_number_active_nfts(collection_2) == 1, 90);
         // Combine nfts
         combine_nft(user1, collection_1, collection_2, nft1_1, nft2_1);
+
+
+        assert!(get_number_active_nfts(collection_1) == 1, 90);
+
+        // TODO: How to handle burned secondaries?
+        // assert!(get_number_active_nfts(collection_2) == 0, 90);
+        
 
         // TODO: Check if old NFTs are burned
 
@@ -1131,7 +1170,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, TokenController {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, TokenController, CollectionNftCounter {
 
         let sword = string::utf8(b"Sword");
         let fire = string::utf8(b"Fire");
@@ -1239,7 +1278,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, CollectionNftCounter {
 
         let sword = string::utf8(b"Sword");
         let fire = string::utf8(b"Fire");
@@ -1331,7 +1370,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, TokenController {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, CombinationRules, TokenController, CollectionNftCounter {
 
         let sword = string::utf8(b"Sword");
         let fire = string::utf8(b"Fire");
@@ -1430,7 +1469,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, EvolutionRules, TokenController {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, EvolutionRules, TokenController, CollectionNftCounter {
 
         let baby = string::utf8(b"Baby Mouse");
         let big = string::utf8(b"Big Mouse");
@@ -1503,7 +1542,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, EvolutionRules, TokenController {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, EvolutionRules, TokenController, CollectionNftCounter {
 
         let baby = string::utf8(b"Baby Mouse");
         let big = string::utf8(b"Big Mouse");
@@ -1579,7 +1618,7 @@ module launchpad_addr::launchpad {
         sender: &signer,
         user1: &signer,
         user2: &signer
-    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, EvolutionRules {
+    ) acquires Registry, CollectionConfig, CollectionOwnerObjConfig, EvolutionRules, CollectionNftCounter {
 
         let baby = string::utf8(b"Baby Mouse");
         let big = string::utf8(b"Big Mouse");

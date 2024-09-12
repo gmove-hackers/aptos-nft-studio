@@ -29,6 +29,11 @@ export const LaunchpadHeader: FC<LaunchpadHeaderProps> = ({ title }) => {
             Create Collection
           </Link>
         )}
+        {location.pathname !== "/my-nfts" && (
+          <Link className={buttonVariants({ variant: "link" })} to={"/my-nfts"}>
+            My NFTs
+          </Link>
+        )}
         {location.pathname !== "/craft-nft" && (
           <Link className={buttonVariants({ variant: "link" })} to={"/craft-nft"}>
             Craft NFT

@@ -1,12 +1,14 @@
 [package]
-name = "digital_asset_launchpad"
+name = "move_nft_studio"
 version = "1.0.0"
 authors = []
 
 [addresses]
-launchpad_addr = "0x27db14d53b31142839a924279d6f7908e8256a1a84e6cf4195fec4b53a24cd69"
-initial_creator_addr = "0x27db14d53b31142839a924279d6f7908e8256a1a84e6cf4195fec4b53a24cd69"
-minter = "0xd56e9211aa484538b9b6c518e1fcfc14908eb7a6f819a3eb8a6826245f913e24"
+launchpad_addr = "0x434b7c236d75fb9414ca8638020df5fefef089abd9e8319f5ace21b113348437"
+initial_creator_addr = "0x434b7c236d75fb9414ca8638020df5fefef089abd9e8319f5ace21b113348437"
+minter = "0x3c41ff6b5845e0094e19888cba63773591be9de59cafa9e582386f6af15dd490"
+minter_aptos = "0x3c41ff6b5845e0094e19888cba63773591be9de59cafa9e582386f6af15dd490"
+minter_movement = "0xd56e9211aa484538b9b6c518e1fcfc14908eb7a6f819a3eb8a6826245f913e24"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }

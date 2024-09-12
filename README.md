@@ -17,19 +17,15 @@ The Move NFT Studio provides a one stop shop for dynamic and composable NFT's. C
 - 🏗️ **Composable NFT's**: Creators can define rules for equipment related to their collection. NFT holders can use Move NFT Studio to discover all the ways they can use or equip their NFT's.
 
 
-## Diagram
-
-![diagram](public/screenshots/placeholder.png)
-
 ## Screenshots
 
-| Landing Page                   | Create Collection              |
+| Landing Page                   | Add Combination Rule               |
 | ------------------------------ | ---------------------------- |
-| ![Screenshot](public/screenshots/placeholder.png) | ![Screenshot](public/screenshots/placeholder.png) |
+| ![Screenshot](public/screenshots/ss1.png) | ![Screenshot](public/screenshots/ss3.png) |
 
-| Add Combination Rule              | Combine NFT                  |
+| Combine NFTs             | Combine NFTs                  |
 | ------------------------------- | -------------------------------- |
-| ![Screenshot](public/screenshots/placeholder.png) | ![Screenshot](public/screenshots/placeholder.png) |
+| ![Screenshot](public/screenshots/ss5.png) | ![Screenshot](public/screenshots/ss4.png) |
 
 ## Next steps
 This hackathon project is a proof of concept for the Move NFT Studio. We plan to keep building and add more features, so Move NFT Studio will become the platform where creators and holders can do everything they want with their NFT's. Features that we want to add:
@@ -39,8 +35,11 @@ This hackathon project is a proof of concept for the Move NFT Studio. We plan to
 - NFT marketplace
 
 ## Links
-- [Deployment on Movement Testnet](https://explorer.movementnetwork.xyz/account/0xdef8a64cc21403856be63f9f9a14de737d7b7ba601afd5c63227fcb32859217b/modules/code/launchpad?network=testnet)
-- [Deployment on Aptos Testnet](https://explorer.aptoslabs.com/account/0xb31855a6b9b90cb6663e9facf1b6a7b0a6be3181229c03a57f44b4422a86b0a0/modules/code/launchpad?network=testnet)
+- [Documentation](https://arjanjohan.gitbook.io/daily-gmove/)
+- [Demo video](https://rebrand.ly/move-nft-studio-demo)
+- [Pitch deck](https://docs.google.com/presentation/d/166SHLBoWVCxMQOaCA7fPwwnPoelFb6vO9JNKeuVSy6c/edit?usp=drive_link)
+- [Deployment on Movement Testnet](https://explorer.movementnetwork.xyz/account/0xf41a2d08728920f8c71f3a0d0ca3f37891d2d228fb8aea9e17ee10679f3713db/modules/code/launchpad?network=testnet)
+- [Deployment on Aptos Testnet](https://explorer.aptoslabs.com/account/0xf41a2d08728920f8c71f3a0d0ca3f37891d2d228fb8aea9e17ee10679f3713db/modules/code/launchpad?network=testnet)
 
 ## Team 
 - [Slothify](https://x.com/zkSlothify)

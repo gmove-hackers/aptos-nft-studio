@@ -2,6 +2,7 @@ import { Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
 
 import { Mint } from "@/pages/Mint";
 import { CreateCollection } from "@/pages/CreateCollection";
+import { MyNFTs } from "@/pages/MyNFTs";
 import { Collections } from "@/pages/Collections";
 import { CraftNFT } from "./pages/CraftNFT";
 import { CollectionDetail } from "./pages/CollectionDetail";
@@ -25,6 +26,10 @@ const router = createBrowserRouter([
       {
         path: "create-collection",
         element: <CreateCollection />,
+      },
+      {
+        path: "my-nfts",
+        element: <MyNFTs />,
       },
       {
         path: "collections",

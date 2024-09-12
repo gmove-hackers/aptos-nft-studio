@@ -60,6 +60,7 @@ export function CraftNFT() {
         const filteredTokens = tokens.filter((token) =>
           collections.some((collection) => collection.collection_id === token.current_token_data.collection_id),
         );
+        console.log("AVH", filteredTokens);
 
         // Fetch token data for each token (assuming standard format)
         const fetchedNFTs: NFT[] = await Promise.all(
@@ -89,7 +90,7 @@ export function CraftNFT() {
             };
           }),
         );
-
+        console.log("Fetched NFTs", fetchedNFTs);
         return fetchedNFTs;
       } catch (error) {
         console.error("Failed to fetch NFTs:", error);
