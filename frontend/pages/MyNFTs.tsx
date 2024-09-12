@@ -1,11 +1,8 @@
 import { aptosClient } from "@/utils/aptosClient";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { useEffect, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import { useEffect } from "react";
 import { ImageMetadata } from "@/utils/assetsUploader";
 import { IpfsImage } from "@/components/IpfsImage";
-import { Button } from "@/components/ui/button";
-import { combineNFT } from "@/entry-functions/combine_nft";
 import { getIpfsJsonContent } from "@/utils/getIpfsJsonContent";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGetCollections } from "@/hooks/useGetCollections";
@@ -31,7 +28,6 @@ interface Token {
 export function MyNFTs() {
   const { account } = useWallet();
   const queryClient = useQueryClient();
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const collections: Array<GetCollectionDataResponse> = useGetCollections();
 
@@ -97,9 +93,6 @@ export function MyNFTs() {
     queryClient.invalidateQueries();
   }, [account, queryClient, collections]);
 
-
-
-
   return (
     <>
       <Header />
@@ -108,21 +101,12 @@ export function MyNFTs() {
         <h2 className="text-3xl text-center font-bold">View Your NFTs</h2>
         <div className="bg-center bg-[length:120%] bg-no-repeat relative before:content-[''] before:block before:pt-[70.8%] lg:mt-[-3rem] md:mt-[-2rem] sm:mt-[-1rem]">
           <div className="absolute w-full h-full top-0 left-0 pt-[22.4%]">
-
-
             <div className="grid grid-cols-5 gap-4">
               {allNFTs.map((nft) => {
-
                 return (
-                  <div
-                    key={nft.id}
-                  >
-                    <div
-                      className={`relative p-2 border `}
-                    >
-                      <div
-                        className={`w-full h-full object-cover `}
-                      >
+                  <div key={nft.id}>
+                    <div className={`relative p-2 border `}>
+                      <div className={`w-full h-full object-cover `}>
                         <IpfsImage ipfsUri={nft.image} />
                       </div>
                     </div>
@@ -131,39 +115,9 @@ export function MyNFTs() {
                 );
               })}
             </div>
-
           </div>
         </div>
       </div>
     </>
   );
 }
-
-interface AreaProps {
-  selectedNFT: NFT | null;
-  onClick: () => void;
-  type: "main" | "secondary";
-}
-
-const Area = ({ selectedNFT, onClick, type }: AreaProps) => {
-  return (
-    <div className="w-1/3 relative before:content-[''] before:block before:pt-[141.53%]">
-      <div className="absolute w-full h-full top-0 left-0 cursor-pointer" onClick={onClick}>
-        <div className="absolute w-full h-full top-0 left-0 pointer-events-none bg-areaCard bg-contain bg-no-repeat drop-shadow-areaCard"></div>
-        {selectedNFT ? (
-          <div>
-            <div>
-              <IpfsImage ipfsUri={selectedNFT.image} className="absolute w-full h-full top-0 left-0 object-contain" />
-            </div>
-          </div>
-        ) : (
-          <p className="absolute top-0 right-0 text-center w-full translate-y-[-120%] text-vw16 font-medium text-primary-foreground bg-gray-800/80 py-[3.5%] rounded-sm">
-            Click to select the
-            <br />
-            {type[0].toUpperCase() + type.slice(1)} NFT
-          </p>
-        )}
-      </div>
-    </div>
-  );
-};
