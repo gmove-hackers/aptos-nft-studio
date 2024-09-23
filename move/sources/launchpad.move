@@ -1523,7 +1523,7 @@ module launchpad_addr::launchpad {
         // Check names of the NFT we will evolve before evolving
         assert!(token::name(nft_baby) == baby, 2);
 
-        // Combine nfts
+        // Evolve nfts
         evolve_nft(user1, collection, nft_baby);
 
         // TODO: Check if old NFT is burned
