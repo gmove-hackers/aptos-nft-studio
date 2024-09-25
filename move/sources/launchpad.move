@@ -163,13 +163,18 @@ module launchpad_addr::launchpad {
         results: SimpleMap<CombinationRule, String>
     }
 
-    struct EvolutionRule has store, drop {
+    struct EvolutionRuleInput has store, drop {
         main_collection: Object<Collection>,
-        main_token: String
+        main_token: String,
+    }
+
+    struct EvolutionRuleOutput has store, drop, copy {
+        block_delay: u64,
+        name: String,
     }
 
     struct EvolutionRules has key {
-        results: SimpleMap<EvolutionRule, String>
+        results: SimpleMap<EvolutionRuleInput, EvolutionRuleOutput>
     }
 
     /// If you deploy the module under an object, sender is the object's signer
@@ -518,17 +523,17 @@ module launchpad_addr::launchpad {
         // Check if this is a valid combination
         let evolution_rules =
             borrow_global<EvolutionRules>(object::object_address(&main_collection));
-        let evolution = EvolutionRule {
+        let evolution_input = EvolutionRuleInput {
             main_collection: main_collection,
             main_token: token::name(main_nft)
         };
 
         assert!(
-            simple_map::contains_key(&evolution_rules.results, &evolution),
+            simple_map::contains_key(&evolution_rules.results, &evolution_input),
             EINCORRECT_EVOLUTION
         );
 
-        let result_token = *simple_map::borrow(&evolution_rules.results, &evolution);
+        let rule_output = *simple_map::borrow(&evolution_rules.results, &evolution_input);
 
         // Create new NFT
         let nft_obj_constructor_ref =
@@ -536,7 +541,7 @@ module launchpad_addr::launchpad {
                 main_collection_owner_obj_signer,
                 collection::name(main_collection),
                 description,
-                result_token,
+                rule_output.name,
                 royalty::get(main_collection),
                 main_uri
             );
@@ -569,20 +574,22 @@ module launchpad_addr::launchpad {
         _sender: &signer,
         main_collection: Object<Collection>,
         main_token: String,
-        result_token: String
+        result_token: String,
+        block_delay: u64
     ) acquires EvolutionRules {
 
         // TODO: Check is sender is owner of main_collection
         let evolution_rules =
             borrow_global_mut<EvolutionRules>(object::object_address(&main_collection));
 
-        let new_rule = EvolutionRule { main_collection, main_token };
+        let new_rule = EvolutionRuleInput { main_collection, main_token };
 
         assert!(
             simple_map::contains_key(&evolution_rules.results, &new_rule) == false,
             EDUPLICATE_EVOLUTION
         );
-        simple_map::add(&mut evolution_rules.results, new_rule, result_token);
+        let rule_output = EvolutionRuleOutput { name: result_token, block_delay };
+        simple_map::add(&mut evolution_rules.results, new_rule, rule_output);
     }
 
     public entry fun add_combination_rule(
@@ -1516,7 +1523,7 @@ module launchpad_addr::launchpad {
             1
         );
 
-        add_evolution_rule(sender, collection, baby, big);
+        add_evolution_rule(sender, collection, baby, big, 100);
 
         // assert rule is created
 
@@ -1590,15 +1597,15 @@ module launchpad_addr::launchpad {
             1
         );
 
-        add_evolution_rule(sender, collection, baby, big);
-        add_evolution_rule(sender, collection, big, old);
+        add_evolution_rule(sender, collection, baby, big, 100);
+        add_evolution_rule(sender, collection, big, old, 100);
 
         // assert rule is created
 
         // Check names of the NFT we will evolve before evolving
         assert!(token::name(nft_baby) == baby, 2);
 
-        // Combine nfts
+        // Evolve nfts
         evolve_nft(user1, collection, nft_baby);
 
         // TODO: Check if old NFT is burned
@@ -1665,8 +1672,8 @@ module launchpad_addr::launchpad {
             1
         );
 
-        add_evolution_rule(sender, collection, baby, big);
-        add_evolution_rule(sender, collection, baby, big);
+        add_evolution_rule(sender, collection, baby, big, 100);
+        add_evolution_rule(sender, collection, baby, big, 100);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
