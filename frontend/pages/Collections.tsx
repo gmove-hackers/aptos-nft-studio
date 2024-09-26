@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { GetCollectionDataResponse } from "@aptos-labs/ts-sdk";
 // Internal components
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 // Internal hooks
 import { useGetCollections } from "@/hooks/useGetCollections";
 // Internal constants
@@ -16,10 +16,10 @@ import { addCombinationRule } from "@/entry-functions/add_combination_rule";
 import { aptosClient } from "@/utils/aptosClient";
 import { convertIpfsUriToCid } from "@/utils/convertIpfsUriToCid";
 import { ImageMetadata, ipfs } from "@/utils/assetsUploader";
-import { getIpfsJsonContent } from "@/utils/getIpfsJsonContent";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { getNumberActiveNFTs } from "@/view-functions/get_number_active_nfts";
 import { Header } from "@/components/Header";
+import { useGetCollectionDetailData } from "@/hooks/useGetCollectionDetailData";
 
 export function Collections() {
   const collections: Array<GetCollectionDataResponse> = useGetCollections();
@@ -27,23 +27,40 @@ export function Collections() {
   return (
     <>
       <Header />
-      <div className="max-w-screen-xl mx-auto py-3 bg-primary-foreground/90 rounded-xl text-primary overflow-hidden">
-        <Table>
-          {!collections.length && (
-            <TableCaption className="pb-6">A list of the collections created under the current contract.</TableCaption>
-          )}
-          <CollectionTableHeader />
-          <TableBody>
-            {collections.length > 0 &&
-              collections.map((collection) => {
-                return <CollectionRow key={collection?.collection_id} collection={collection} />;
-              })}
-          </TableBody>
-        </Table>
-      </div>
+      {collections.length === 0 && <div className="max-w-screen-xl mx-auto p-4">Loading...</div>}
+      {collections.length > 0 && (
+        <ul className="max-w-screen-xl mx-auto w-11/12 grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-4">
+          {collections.map((item, i) => {
+            return (
+              <li key={i}>
+                <CollectionItem collection={item} />
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </>
   );
 }
+
+const CollectionItem = ({ collection }: { collection: GetCollectionDataResponse }) => {
+  const { metadata } = useGetCollectionDetailData(collection);
+
+  return (
+    <div className="max-w-80 mx-auto overflow-hidden bg-primary/60 rounded-xl">
+      <Link to={`/collection/${collection.collection_id}`} className="block relative aspect-square group">
+        {metadata && (
+          <IpfsImage
+            ipfsUri={metadata.image}
+            className="absolute w-full h-full object-contain group-hover:scale-105 transition-transform duration-200 pointer-events-none"
+          />
+        )}
+        <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black to-transparent pointer-events-none"></div>
+        <p className="absolute bottom-1.5 w-11/12 right-1/2 translate-x-1/2 truncate">{collection.collection_name}</p>
+      </Link>
+    </div>
+  );
+};
 
 export const CollectionTableHeader = () => {
   return (
@@ -68,24 +85,7 @@ export const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // fetch collection metadata and minted nfts amount
-  const dataQuery = useQuery({
-    queryKey: ["collection", collection.collection_id],
-    queryFn: async () => {
-      try {
-        const data = await Promise.all([
-          getIpfsJsonContent(collection.uri),
-          getNumberActiveNFTs({ collection_id: collection.collection_id }),
-        ]);
-
-        return data;
-      } catch (error) {
-        console.error("Error fetching collection data:", error);
-        return [null, null];
-      }
-    },
-  });
-  const [metadata, mintedNfts] = dataQuery.data || [undefined, undefined];
+  const { metadata, mintedNfts } = useGetCollectionDetailData(collection);
 
   const [isUploading, setIsUploading] = useState(false);
 
