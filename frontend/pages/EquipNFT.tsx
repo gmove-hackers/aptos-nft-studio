@@ -5,6 +5,11 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, us
 import { SortableContext, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Header } from "@/components/Header";
+import sword from "@/assets/sample_collection/1.png";
+import fireSword from "@/assets/sample_collection/combination1.png";
+import fire from "@/assets/sample_collection/2.png";
+import water from "@/assets/sample_collection/3.png";
+import { Button } from "@/components/ui/button";
 
 interface NFT {
   id: string;
@@ -13,17 +18,17 @@ interface NFT {
 }
 
 const initialParentNFTs: NFT[] = [
-  { id: "1", name: "Parent NFT 1", image: "./assets/sword.png" },
-  { id: "2", name: "Parent NFT 2", image: "./assets/sword.png" },
+  { id: "1", name: "Parent NFT 1", image: sword },
+  { id: "2", name: "Parent NFT 2", image: fireSword },
 ];
 
 const initialChildrenNFTsData: NFT[] = [
-  { id: "1", name: "Child NFT 1", image: "./assets/fire.png" },
-  { id: "2", name: "Child NFT 2", image: "./assets/fire.png" },
-  { id: "3", name: "Child NFT 3", image: "./assets/fire.png" },
+  { id: "1", name: "Child NFT 1", image: fire },
+  { id: "2", name: "Child NFT 2", image: fire },
+  { id: "3", name: "Child NFT 3", image: water },
 ];
 
-export function AttachEquipNFT() {
+export function EquipNFT() {
   const { signAndSubmitTransaction } = useWallet();
   const [selectedParent, setSelectedParent] = useState<NFT | null>(null);
   const [selectedChildren, setSelectedChildren] = useState<NFT[]>([]);
@@ -96,86 +101,95 @@ export function AttachEquipNFT() {
     <>
       <Header />
 
-      <div className="container mx-auto p-4">
-        <div className="flex">
-          <div className="w-1/4 p-4">
-            <h2 className="text-xl mb-2">Select Parent NFT</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {initialParentNFTs.map((nft) => (
-                <button
-                  key={nft.id}
-                  className={`w-full h-32 border ${
-                    selectedParent?.id === nft.id ? "border-blue-500" : "border-gray-300"
-                  }`}
-                  onClick={() => handleParentSelect(nft)}
-                >
-                  <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" />
-                </button>
-              ))}
+      <div className="container mx-auto px-4 pb-16">
+        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="flex">
+            <div className="w-1/3 p-4">
+              <div className="">
+                <h2 className="text-xl mb-4">Select Parent NFT</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {initialParentNFTs.map((nft) => (
+                    <button
+                      key={nft.id}
+                      className={`w-full aspect-square border ${
+                        selectedParent?.id === nft.id ? "border-blue-500" : "border-gray-300"
+                      }`}
+                      onClick={() => handleParentSelect(nft)}
+                    >
+                      <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {selectedParent && (
+                <div className="mt-10">
+                  <h2 className="text-xl mb-4">Children NFT candidates</h2>
+                  <div className="flex space-x-4 min-h-[124px]">
+                    {initialChildrenNFTs.map((nft) => (
+                      <DraggableChildNFT key={nft.id} nft={nft} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="w-2/3 flex justify-center items-start p-4">
+              {selectedParent && (
+                <div className="text-center">
+                  <h2 className="text-xl mb-4">Selected Parent NFT</h2>
+                  <div className="w-80 h-80 mx-auto border border-blue-500">
+                    <img src={selectedParent.image} alt={selectedParent.name} className="w-full h-full object-cover" />
+                    <p className="mt-2">{selectedParent.name}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="w-3/4 flex justify-center items-start p-4">
-            {selectedParent && (
-              <div className="text-center">
-                <h2 className="text-xl">Selected Parent NFT</h2>
-                <div className="w-64 h-64 mx-auto border border-blue-500 mt-4">
-                  <img src={selectedParent.image} alt={selectedParent.name} className="w-full h-full object-cover" />
-                  <p className="mt-2">{selectedParent.name}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {selectedParent && (
-          <div className="mt-10 text-center">
-            <h2 className="text-xl">Children NFTs</h2>
-            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          {selectedParent && (
+            <div className="mt-2 text-center">
+              <h2 className="text-xl mb-4">Drop Children NFTs here</h2>
               <DroppableArea id="droppable-area">
                 <SortableContext items={selectedChildren.map((nft) => nft.id)}>
-                  <div className="flex space-x-4 mt-4 justify-center">
+                  <div className="flex space-x-4 mt-2 justify-center">
                     {selectedChildren.map((nft) => (
                       <SortableNFT key={nft.id} nft={nft} />
                     ))}
                   </div>
                 </SortableContext>
               </DroppableArea>
-              <div className="flex space-x-4 justify-center">
-                {initialChildrenNFTs.map((nft) => (
-                  <DraggableChildNFT key={nft.id} nft={nft} />
-                ))}
-              </div>
               <DragOverlay>
                 {activeId ? (
-                  <div className="w-24 h-24 border border-green-500">
-                    <img
-                      src={
-                        initialChildrenNFTs.find((nft) => nft.id === activeId)?.image ||
-                        selectedChildren.find((nft) => nft.id === activeId)?.image
-                      }
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                    <p className="text-center">
+                  <div className="w-24">
+                    <div className="aspect-square border border-green-500">
+                      <img
+                        src={
+                          initialChildrenNFTs.find((nft) => nft.id === activeId)?.image ||
+                          selectedChildren.find((nft) => nft.id === activeId)?.image
+                        }
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <p className="text-center mt-1">
                       {initialChildrenNFTs.find((nft) => nft.id === activeId)?.name ||
                         selectedChildren.find((nft) => nft.id === activeId)?.name}
                     </p>
                   </div>
                 ) : null}
               </DragOverlay>
-            </DndContext>
-          </div>
-        )}
+            </div>
+          )}
+        </DndContext>
 
-        <div className="mt-20 text-center">
-          <button
-            className="px-4 py-2 bg-blue-500 text-white rounded"
+        <div className="mt-10 text-center">
+          <Button
+            variant="green"
             onClick={handleSubmit}
-            disabled={!selectedParent || selectedChildren.length === 0}
+            disabled={!selectedParent || selectedChildren.length === 0 || true}
           >
-            Submit
-          </button>
+            Execute
+          </Button>
         </div>
       </div>
     </>
@@ -183,18 +197,21 @@ export function AttachEquipNFT() {
 }
 
 const DraggableChildNFT: React.FC<{ nft: NFT }> = ({ nft }) => {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: nft.id,
   });
 
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0 : 1,
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="w-24 h-24 border border-gray-300">
-      <img src={nft.image} alt={nft.name} />
-      <p className="text-center">{nft.name}</p>
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="w-24">
+      <div className="aspect-square border border-gray-300">
+        <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" />
+      </div>
+      <p className="text-center mt-1">{nft.name}</p>
     </div>
   );
 };
@@ -205,7 +222,7 @@ const DroppableArea: React.FC<{ id: string; children: React.ReactNode }> = ({ id
   });
 
   return (
-    <div ref={setNodeRef} className="border-2 border-dashed border-gray-500 p-4">
+    <div ref={setNodeRef} className="border-2 border-dashed border-gray-500 p-6 min-h-[184px]">
       {children}
     </div>
   );
@@ -223,9 +240,11 @@ const SortableNFT: React.FC<{ nft: NFT }> = ({ nft }) => {
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="w-24 h-24 border border-green-500">
-      <img src={nft.image} alt={nft.name} />
-      <p className="text-center">{nft.name}</p>
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="w-24">
+      <div className="aspect-square border border-green-500">
+        <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" />
+      </div>
+      <p className="text-center mt-1">{nft.name}</p>
     </div>
   );
 };
