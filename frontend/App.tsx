@@ -50,8 +50,11 @@ const router = createBrowserRouter([
 function App() {
   return (
     <>
-      <div className="bg-bg bg-cover bg-center min-h-screen text-primary-foreground">
-        <RouterProvider router={router} />
+      <div className="min-h-screen text-primary-foreground">
+        <div className="fixed w-full h-full pointer-events-none bg-bg bg-cover bg-center"></div>
+        <div className="relative">
+          <RouterProvider router={router} />
+        </div>
       </div>
     </>
   );

@@ -17,6 +17,8 @@ import { DateTimeInput } from "@/components/ui/date-time-input";
 import { createCollection } from "@/entry-functions/create_collection";
 import { useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/Header";
+import { Container } from "@/components/Container";
+import { PageTitle } from "@/components/PageTitle";
 
 export function CreateCollection() {
   // Wallet Adapter provider
@@ -132,118 +134,120 @@ export function CreateCollection() {
     <>
       <Header />
 
-      <div className="flex flex-col md:flex-row items-start justify-between px-4 py-8 gap-4 max-w-screen-xl mx-auto bg-primary-foreground/90 rounded-xl text-primary">
-        <div className="w-full md:w-2/3 flex flex-col gap-y-5 order-2 md:order-1">
-          <UploadSpinner on={isUploading} />
+      <Container>
+        <PageTitle text={<>Create a Collection</>} />
+        <div className="flex flex-col md:flex-row items-start justify-between px-4 py-8 gap-4 bg-primary-foreground/90 rounded-xl text-primary">
+          <div className="w-full md:w-2/3 flex flex-col gap-y-5 order-2 md:order-1">
+            <UploadSpinner on={isUploading} />
 
-          <Card>
-            <CardHeader>
-              <CardDescription>Uploads collection files to IPFS</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-start justify-between">
-                {!files?.length && (
-                  <Label
-                    htmlFor="upload"
-                    className={buttonVariants({
-                      variant: "outline",
-                      className: "cursor-pointer",
-                    })}
-                  >
-                    Choose Folder to Upload
-                  </Label>
-                )}
-                <Input
-                  className="hidden"
-                  ref={inputRef}
-                  id="upload"
-                  disabled={isUploading || !account}
-                  webkitdirectory="true"
-                  multiple
-                  type="file"
-                  placeholder="Upload Assets"
-                  onChange={(event) => {
-                    setFiles(event.currentTarget.files);
-                  }}
-                />
-
-                {!!files?.length && (
-                  <div>
-                    {files.length} files selected{" "}
-                    <Button
-                      variant="link"
-                      className="text-destructive"
-                      onClick={() => {
-                        setFiles(null);
-                        inputRef.current!.value = "";
-                      }}
+            <Card>
+              <CardHeader>
+                <CardDescription>Uploads collection files to IPFS</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-start justify-between">
+                  {!files?.length && (
+                    <Label
+                      htmlFor="upload"
+                      className={buttonVariants({
+                        variant: "outline",
+                        className: "cursor-pointer",
+                      })}
                     >
-                      Clear
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                      Choose Folder to Upload
+                    </Label>
+                  )}
+                  <Input
+                    className="hidden"
+                    ref={inputRef}
+                    id="upload"
+                    disabled={isUploading || !account}
+                    webkitdirectory="true"
+                    multiple
+                    type="file"
+                    placeholder="Upload Assets"
+                    onChange={(event) => {
+                      setFiles(event.currentTarget.files);
+                    }}
+                  />
 
-          <div className="flex item-center gap-4 mt-4">
-            <DateTimeInput
-              id="mint-start"
-              label="Public mint start date"
-              tooltip="When minting becomes active"
+                  {!!files?.length && (
+                    <div>
+                      {files.length} files selected{" "}
+                      <Button
+                        variant="link"
+                        className="text-destructive"
+                        onClick={() => {
+                          setFiles(null);
+                          inputRef.current!.value = "";
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex item-center gap-4 mt-4">
+              <DateTimeInput
+                id="mint-start"
+                label="Public mint start date"
+                tooltip="When minting becomes active"
+                disabled={isUploading || !account}
+                date={publicMintStartDate}
+                onDateChange={setPublicMintStartDate}
+                time={publicMintStartTime}
+                onTimeChange={onPublicMintStartTime}
+                className="basis-1/2"
+              />
+
+              <DateTimeInput
+                id="mint-end"
+                label="Public mint end date"
+                tooltip="When minting finishes"
+                disabled={isUploading || !account}
+                date={publicMintEndDate}
+                onDateChange={setPublicMintEndDate}
+                time={publicMintEndTime}
+                onTimeChange={onPublicMintEndTime}
+                className="basis-1/2"
+              />
+            </div>
+
+            <LabeledInput
+              id="mint-limit"
+              required
+              label="Mint limit per address"
+              tooltip="How many NFTs an individual address is allowed to mint"
               disabled={isUploading || !account}
-              date={publicMintStartDate}
-              onDateChange={setPublicMintStartDate}
-              time={publicMintStartTime}
-              onTimeChange={onPublicMintStartTime}
-              className="basis-1/2"
+              onChange={(e) => {
+                setPublicMintLimitPerAccount(parseInt(e.target.value));
+              }}
             />
 
-            <DateTimeInput
-              id="mint-end"
-              label="Public mint end date"
-              tooltip="When minting finishes"
+            <LabeledInput
+              id="royalty-percentage"
+              label="Royalty Percentage"
+              tooltip="The percentage of trading value that collection creator gets when an NFT is sold on marketplaces"
               disabled={isUploading || !account}
-              date={publicMintEndDate}
-              onDateChange={setPublicMintEndDate}
-              time={publicMintEndTime}
-              onTimeChange={onPublicMintEndTime}
-              className="basis-1/2"
+              onChange={(e) => {
+                setRoyaltyPercentage(parseInt(e.target.value));
+              }}
             />
-          </div>
 
-          <LabeledInput
-            id="mint-limit"
-            required
-            label="Mint limit per address"
-            tooltip="How many NFTs an individual address is allowed to mint"
-            disabled={isUploading || !account}
-            onChange={(e) => {
-              setPublicMintLimitPerAccount(parseInt(e.target.value));
-            }}
-          />
+            <LabeledInput
+              id="mint-fee"
+              label="Mint fee per NFT in $MOVE"
+              tooltip="The fee the nft minter is paying the collection creator when they mint an NFT, denominated in APT"
+              disabled={isUploading || !account}
+              onChange={(e) => {
+                setPublicMintFeePerNFT(Number(e.target.value));
+              }}
+            />
 
-          <LabeledInput
-            id="royalty-percentage"
-            label="Royalty Percentage"
-            tooltip="The percentage of trading value that collection creator gets when an NFT is sold on marketplaces"
-            disabled={isUploading || !account}
-            onChange={(e) => {
-              setRoyaltyPercentage(parseInt(e.target.value));
-            }}
-          />
-
-          <LabeledInput
-            id="mint-fee"
-            label="Mint fee per NFT in $MOVE"
-            tooltip="The fee the nft minter is paying the collection creator when they mint an NFT, denominated in APT"
-            disabled={isUploading || !account}
-            onChange={(e) => {
-              setPublicMintFeePerNFT(Number(e.target.value));
-            }}
-          />
-
-          {/* <LabeledInput
+            {/* <LabeledInput
             id="for-myself"
             label="Mint for myself"
             tooltip="How many NFTs to mint immediately for the creator"
@@ -253,23 +257,24 @@ export function CreateCollection() {
             }}
           /> */}
 
-          <Button
-            variant="green"
-            className="self-start mt-4"
-            onClick={onCreateCollection}
-            disabled={
-              !account ||
-              !files?.length ||
-              !publicMintStartDate ||
-              !publicMintLimitPerAccount ||
-              !account ||
-              isUploading
-            }
-          >
-            Create Collection
-          </Button>
+            <Button
+              variant="green"
+              className="self-start mt-4"
+              onClick={onCreateCollection}
+              disabled={
+                !account ||
+                !files?.length ||
+                !publicMintStartDate ||
+                !publicMintLimitPerAccount ||
+                !account ||
+                isUploading
+              }
+            >
+              Create Collection
+            </Button>
+          </div>
         </div>
-      </div>
+      </Container>
     </>
   );
 }

@@ -1,34 +1,17 @@
 import { aptosClient } from "@/utils/aptosClient";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ImageMetadata } from "@/utils/assetsUploader";
 import { IpfsImage } from "@/components/IpfsImage";
 import { Button } from "@/components/ui/button";
 import { combineNFT } from "@/entry-functions/combine_nft";
-import { getIpfsJsonContent } from "@/utils/getIpfsJsonContent";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGetCollections } from "@/hooks/useGetCollections";
-import { GetCollectionDataResponse } from "@aptos-labs/ts-sdk";
+import { useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/Header";
 import CraftBtnActive from "@/assets/img/craft_btn_active.png";
 import CraftBtnInactive from "@/assets/img/craft_btn_inactive.png";
-
-interface NFT {
-  id: string;
-  collection_id: string;
-  name: string;
-  image: string;
-}
-
-interface Token {
-  current_token_data: {
-    collection_id: string;
-    token_name: string;
-    token_uri: string;
-    token_data_id: string;
-  };
-}
+import { NFT, useGetOwnedNFTs } from "@/hooks/useGetOwnedNFTs";
+import { PageTitle } from "@/components/PageTitle";
+import { Container } from "@/components/Container";
 
 export function CraftNFT() {
   const { account, signAndSubmitTransaction } = useWallet();
@@ -40,70 +23,7 @@ export function CraftNFT() {
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const collections: Array<GetCollectionDataResponse> = useGetCollections();
-
-  // fetch NFTs for the connected wallet
-  const nftsQuery = useQuery({
-    queryKey: ["nfts", account?.address],
-    queryFn: async () => {
-      if (!account) return [];
-
-      try {
-        // Fetch all tokens owned by the account using getAccountOwnedTokens
-        const tokens = (await aptosClient().getAccountOwnedTokens({ accountAddress: account.address })) as Token[];
-
-        if (!tokens || tokens.length === 0) {
-          return [];
-        }
-
-        // Filter tokens by collections
-        const filteredTokens = tokens.filter((token) =>
-          collections.some((collection) => collection.collection_id === token.current_token_data.collection_id),
-        );
-        console.log("AVH", filteredTokens);
-
-        // Fetch token data for each token (assuming standard format)
-        const fetchedNFTs: NFT[] = await Promise.all(
-          filteredTokens.map(async (token) => {
-            const { collection_id, token_name, token_uri, token_data_id } = token.current_token_data;
-
-            const metadata = (await getIpfsJsonContent(token_uri)) as ImageMetadata;
-
-            let image = metadata.image;
-
-            // If combined NFT, set the proper image
-            if (metadata.combinations) {
-              const combinedName = Object.keys(metadata.combinations).find((key) => key === token_name);
-              if (combinedName) {
-                const combinedMetadata = (await getIpfsJsonContent(
-                  metadata.combinations[combinedName],
-                )) as ImageMetadata;
-                image = combinedMetadata.image;
-              }
-            }
-
-            return {
-              id: token_data_id,
-              collection_id,
-              name: token_name,
-              image,
-            };
-          }),
-        );
-        console.log("Fetched NFTs", fetchedNFTs);
-        return fetchedNFTs;
-      } catch (error) {
-        console.error("Failed to fetch NFTs:", error);
-        return [];
-      }
-    },
-  });
-
-  const allNFTs = nftsQuery.data || [];
-
-  useEffect(() => {
-    queryClient.invalidateQueries();
-  }, [account, queryClient, collections]);
+  const { data: allNFTs, isLoading: isNFTsLoading, isPending: isNFTsPending } = useGetOwnedNFTs();
 
   const handleAreaClick = (area: string) => {
     setSelectedArea(area);
@@ -162,8 +82,8 @@ export function CraftNFT() {
     <>
       <Header />
 
-      <div className="container mx-auto p-4 pb-16">
-        <h2 className="text-3xl text-center font-bold">Combine Your NFTs</h2>
+      <Container variant="container">
+        <PageTitle margin="none" text={<>Combine Your NFTs</>} />
         <div className="bg-summoningBoard bg-center bg-[length:120%] bg-no-repeat relative before:content-[''] before:block before:pt-[70.8%] lg:mt-[-3rem] md:mt-[-2rem] sm:mt-[-1rem]">
           <div className="absolute w-full h-full top-0 left-0 pt-[22.4%]">
             <div className="flex justify-around items-start max-w-[52rem] mx-auto w-[61%]">
@@ -206,36 +126,42 @@ export function CraftNFT() {
                   }}
                 >
                   <Dialog.Title className="text-xl text-center mb-4 font-medium">Select an NFT</Dialog.Title>
-                  <div className="grid grid-cols-3 gap-4">
-                    {allNFTs.map((nft) => {
-                      const isDisabled =
-                        (selectedArea === "area1" && nft.id === selectedNFT2?.id) ||
-                        (selectedArea === "area2" && nft.id === selectedNFT1?.id);
-                      const isSelectedInSameArea =
-                        (selectedArea === "area1" && nft.id === selectedNFT1?.id) ||
-                        (selectedArea === "area2" && nft.id === selectedNFT2?.id);
+                  {isNFTsLoading || isNFTsPending ? (
+                    <div className="">Loading...</div>
+                  ) : !allNFTs || allNFTs.length === 0 ? (
+                    <div className="">No NFTs found</div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-4">
+                      {allNFTs.map((nft) => {
+                        const isDisabled =
+                          (selectedArea === "area1" && nft.id === selectedNFT2?.id) ||
+                          (selectedArea === "area2" && nft.id === selectedNFT1?.id);
+                        const isSelectedInSameArea =
+                          (selectedArea === "area1" && nft.id === selectedNFT1?.id) ||
+                          (selectedArea === "area2" && nft.id === selectedNFT2?.id);
 
-                      return (
-                        <div
-                          key={nft.id}
-                          className={`${isDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
-                          onClick={() => !isDisabled && handleNFTSelect(nft)}
-                        >
+                        return (
                           <div
-                            className={`relative p-2 border ${isSelectedInSameArea ? "border-2 border-green-400" : ""}`}
+                            key={nft.id}
+                            className={`${isDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+                            onClick={() => !isDisabled && handleNFTSelect(nft)}
                           >
                             <div
-                              className={`w-full h-full object-cover  ${isDisabled ? "opacity-50 grayscale-[50%]" : ""}`}
+                              className={`relative p-2 border ${isSelectedInSameArea ? "border-2 border-green-400" : ""}`}
                             >
-                              <IpfsImage ipfsUri={nft.image} />
+                              <div
+                                className={`w-full h-full object-cover  ${isDisabled ? "opacity-50 grayscale-[50%]" : ""}`}
+                              >
+                                <IpfsImage ipfsUri={nft.image} />
+                              </div>
+                              {isDisabled && <div className="absolute inset-0 bg-black opacity-80"></div>}
                             </div>
-                            {isDisabled && <div className="absolute inset-0 bg-black opacity-80"></div>}
+                            <p className={`text-center pt-2 ${isDisabled ? "opacity-50" : ""}`}>{nft.name}</p>
                           </div>
-                          <p className={`text-center pt-2 ${isDisabled ? "opacity-50" : ""}`}>{nft.name}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="flex justify-end mt-6">
                     <Dialog.Close asChild>
                       <button className="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
@@ -246,7 +172,7 @@ export function CraftNFT() {
             </Dialog.Root>
           </div>
         </div>
-      </div>
+      </Container>
     </>
   );
 }
