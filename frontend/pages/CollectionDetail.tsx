@@ -19,6 +19,7 @@ import { IpfsImage } from "@/components/IpfsImage";
 import { Button } from "@/components/ui/button";
 import { LabeledInput } from "@/components/ui/labeled-input";
 import { NETWORK } from "@/constants";
+import { addEvolutionRule } from "@/entry-functions/add_evolution_rule";
 
 export function CollectionDetail() {
   const { collection_id } = useParams<{ collection_id: string }>();
@@ -90,6 +91,10 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
   const [combinationSecondaryCollection, setCombinationSecondaryCollection] = useState<string>();
   const [combinationSecondaryTokenName, setCombinationSecondaryTokenName] = useState<string>();
   const [combinationResultTokenName, setCombinationResultTokenName] = useState<string>();
+  // Add evolution rule
+  const evolutionMainCollection = collection.collection_id;
+  const [evolutionMainTokenName, setEvolutionMainTokenName] = useState<string>();
+  const [evolutionResultTokenName, setEvolutionResultTokenName] = useState<string>();
 
   const onClickRow = () => {
     if (isDetail) return;
@@ -143,10 +148,16 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
       );
 
       // Wait for the transaction to be commited to chain
-      await aptosClient().waitForTransaction({
+      const committedTransactionResponse = await aptosClient().waitForTransaction({
         transactionHash: response.hash,
       });
       await queryClient.invalidateQueries();
+
+      // Once the transaction has been successfully commited to chain,
+      if (committedTransactionResponse.success) {
+        // navigate to the `my-nfts` page
+        navigate(`/my-nfts`);
+      }
     } catch (error) {
       alert(error);
     } finally {
@@ -194,6 +205,42 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
     }
   };
 
+  // Add evolution rule
+  const executeAddEvolutionRule = async () => {
+    try {
+      if (!account) throw new Error("Please connect your wallet");
+      if (!evolutionMainTokenName) throw new Error("Please set the main token name");
+      if (!evolutionResultTokenName) throw new Error("Please set the result token name");
+      if (isUploading) throw new Error("Uploading in progress");
+      setIsUploading(true);
+
+      // Submit a add_evolution_rule entry function transaction
+      const response = await signAndSubmitTransaction(
+        addEvolutionRule({
+          main_collection: evolutionMainCollection,
+          main_token: evolutionMainTokenName,
+          result_token: evolutionResultTokenName,
+        }),
+      );
+
+      // Wait for the transaction to be commited to chain
+      const committedTransactionResponse = await aptosClient().waitForTransaction({
+        transactionHash: response.hash,
+      });
+      await queryClient.invalidateQueries();
+
+      // Once the transaction has been successfully commited to chain,
+      if (committedTransactionResponse.success) {
+        // navigate to the `evolve-nft` page
+        navigate(`/evolve-nft`);
+      }
+    } catch (error) {
+      alert(error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <>
       <TableRow
@@ -222,6 +269,7 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
       </TableRow>
       {isDetail && (
         <>
+          {/* Mint */}
           <TableRow className="hover:bg-inherit border-0">
             <TableCell className="w-full" colSpan={4}>
               <p className="mb-4 font-bold text-16">Mint 1 token</p>
@@ -250,6 +298,7 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
             </TableCell>
           </TableRow>
           {/* TODO: Only activate this for the collection owner */}
+          {/* Combination */}
           <TableRow className="hover:bg-inherit">
             <TableCell className="w-full" colSpan={4}>
               <div className="max-w-2xl">
@@ -329,6 +378,66 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
                     !combinationSecondaryCollection ||
                     !combinationSecondaryTokenName ||
                     !combinationResultTokenName
+                  }
+                  className="mt-5"
+                >
+                  Execute
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+          {/* Evolution */}
+          <TableRow className="hover:bg-inherit">
+            <TableCell className="w-full" colSpan={4}>
+              <div className="max-w-2xl">
+                <p className="mb-5 font-bold text-16">Add evolution rule</p>
+                <div>
+                  <LabeledInput
+                    id={`${collection.collection_id}-evolution-main-collection`}
+                    required
+                    label="Main collection"
+                    tooltip="Set the collection id of the main token to be evolved."
+                    disabled={true}
+                    onChange={() => {}}
+                    type="text"
+                    value={collection.collection_id}
+                  />
+                </div>
+                <div className="mt-5">
+                  <LabeledInput
+                    id={`${collection.collection_id}-evolution-main-token-name`}
+                    required
+                    label="Main token name"
+                    tooltip="Set the main token name to be evolved."
+                    disabled={isUploading || !account}
+                    onChange={(e) => {
+                      setEvolutionMainTokenName(e.target.value);
+                    }}
+                    type="text"
+                  />
+                </div>
+                <div className="mt-5">
+                  <LabeledInput
+                    id={`${collection.collection_id}-evolution-result-token-name`}
+                    required
+                    label="Evolved token name"
+                    tooltip="Set the name of the token to be created by this evolution."
+                    disabled={isUploading || !account}
+                    onChange={(e) => {
+                      setEvolutionResultTokenName(e.target.value);
+                    }}
+                    type="text"
+                  />
+                </div>
+                <Button
+                  variant="green"
+                  onClick={executeAddEvolutionRule}
+                  disabled={
+                    isUploading ||
+                    !account ||
+                    !evolutionMainCollection ||
+                    !evolutionMainTokenName ||
+                    !evolutionResultTokenName
                   }
                   className="mt-5"
                 >

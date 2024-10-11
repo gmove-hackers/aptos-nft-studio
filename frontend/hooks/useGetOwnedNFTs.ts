@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGetCollections } from "@/hooks/useGetCollections";
 import { aptosClient } from "@/utils/aptosClient";
 import { getIpfsJsonContent } from "@/utils/getIpfsJsonContent";
-import { ImageMetadata } from "@/utils/assetsUploader";
+import { FEATURES, ImageMetadata } from "@/utils/assetsUploader";
 import { useEffect } from "react";
 
 export interface NFT {
@@ -56,20 +56,11 @@ export function useGetOwnedNFTs() {
           filteredTokens.map(async (token) => {
             const { collection_id, token_name, token_uri, token_data_id } = token.current_token_data;
 
+            // Fetch metadata from token_uri
             const metadata = (await getIpfsJsonContent(token_uri)) as ImageMetadata;
 
-            let image = metadata.image;
-
-            // If combined NFT, set the proper image
-            if (metadata.combinations) {
-              const combinedName = Object.keys(metadata.combinations).find((key) => key === token_name);
-              if (combinedName) {
-                const combinedMetadata = (await getIpfsJsonContent(
-                  metadata.combinations[combinedName],
-                )) as ImageMetadata;
-                image = combinedMetadata.image;
-              }
-            }
+            // Set the proper image based on features
+            const image = await setImageBasedOnFeatures(metadata, token_name);
 
             return {
               id: token_data_id,
@@ -87,4 +78,30 @@ export function useGetOwnedNFTs() {
       }
     },
   });
+}
+
+// Function to set the proper image based on features
+async function setImageBasedOnFeatures(metadata: ImageMetadata, token_name: string): Promise<string> {
+  let image = metadata.image; // Initialize image with the default metadata image
+
+  for (const feature of FEATURES) {
+    const featureData = metadata[feature.keyName];
+
+    if (featureData) {
+      const matchingKey = Object.keys(featureData).find((key) => key === token_name);
+
+      if (matchingKey) {
+        try {
+          const featureMetadata = (await getIpfsJsonContent(featureData[matchingKey])) as ImageMetadata;
+          image = featureMetadata.image;
+
+          break;
+        } catch (error) {
+          console.error(`Error fetching ${feature.name} metadata for ${matchingKey}:`, error);
+        }
+      }
+    }
+  }
+
+  return image;
 }

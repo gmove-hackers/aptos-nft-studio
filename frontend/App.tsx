@@ -6,6 +6,7 @@ import { MyNFTs } from "@/pages/MyNFTs";
 import { Collections } from "@/pages/Collections";
 import { CraftNFT } from "./pages/CraftNFT";
 import { CollectionDetail } from "./pages/CollectionDetail";
+import { EvolveNFT } from "./pages/EvolveNFT";
 
 function Layout() {
   return (
@@ -42,6 +43,10 @@ const router = createBrowserRouter([
       {
         path: "craft-nft",
         element: <CraftNFT />,
+      },
+      {
+        path: "evolve-nft",
+        element: <EvolveNFT />,
       },
     ],
   },

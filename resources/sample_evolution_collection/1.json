@@ -1,14 +1,9 @@
 {
-  "name": "Iron Sword",
+  "name": "Floofy",
   "description": "Created on Move NFT Studio.",
   "image": "",
   "external_url": "https://gmove-nft.netlify.app/",
-  "combinations": {
-    "Flame Blade": "",
-    "Aqua Sabre": ""
-  },
   "evolutions": {
-    "Aqua Sabre": "",
-    "Flame Blade": ""
+    "Luna Floofy": ""
   }
 }

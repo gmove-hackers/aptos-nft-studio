@@ -239,7 +239,7 @@ export function CreateCollection() {
 
             <LabeledInput
               id="mint-fee"
-              label="Mint fee per NFT in $MOVE"
+              label="Mint fee per NFT in APT"
               tooltip="The fee the nft minter is paying the collection creator when they mint an NFT, denominated in APT"
               disabled={isUploading || !account}
               onChange={(e) => {
