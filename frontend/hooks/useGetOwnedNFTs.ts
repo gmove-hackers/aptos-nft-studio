@@ -6,11 +6,9 @@ import { getIpfsJsonContent } from "@/utils/getIpfsJsonContent";
 import { FEATURES, ImageMetadata } from "@/utils/assetsUploader";
 import { useEffect } from "react";
 
-export interface NFT {
+export interface NFT extends ImageMetadata {
   id: string;
   collection_id: string;
-  name: string;
-  image: string;
 }
 
 export interface Token {
@@ -63,6 +61,7 @@ export function useGetOwnedNFTs() {
             const image = await setImageBasedOnFeatures(metadata, token_name);
 
             return {
+              ...metadata,
               id: token_data_id,
               collection_id,
               name: token_name,

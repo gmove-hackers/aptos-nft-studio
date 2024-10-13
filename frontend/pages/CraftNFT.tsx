@@ -1,6 +1,6 @@
 import { aptosClient } from "@/utils/aptosClient";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { IpfsImage } from "@/components/IpfsImage";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/Header";
 import CraftBtnActive from "@/assets/img/craft_btn_active.png";
 import CraftBtnInactive from "@/assets/img/craft_btn_inactive.png";
-import { NFT, useGetOwnedNFTs } from "@/hooks/useGetOwnedNFTs";
+import { NFT } from "@/hooks/useGetOwnedNFTs";
 import { PageTitle } from "@/components/PageTitle";
 import { Container } from "@/components/Container";
+import { NFTWithCollectionData } from "@/hooks/useNFTModal";
+import { useGetOwnedNFTsWithCollectionData } from "@/hooks/useGetOwnedNFTsWithCollectionData";
+import { UserTransactionResponse } from "@aptos-labs/ts-sdk";
+import { NFTItem } from "@/components/NFTItem";
+import { Link } from "react-router-dom";
 
 export function CraftNFT() {
   const { account, signAndSubmitTransaction } = useWallet();
@@ -23,7 +28,26 @@ export function CraftNFT() {
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const { data: allNFTs, isLoading: isNFTsLoading, isPending: isNFTsPending } = useGetOwnedNFTs();
+  const { data: allNFTs, isLoading: isNFTsLoading, isFetching: isNFTsFetching } = useGetOwnedNFTsWithCollectionData();
+
+  // New NFT
+  const [newNFT, setNewNFT] = useState<NFTWithCollectionData | null>();
+  const newNFTIdRef = useRef<string | null>();
+  useEffect(() => {
+    if (!isModalOpen) {
+      setNewNFT(null);
+      newNFTIdRef.current = null;
+    }
+  }, [isModalOpen]);
+  useEffect(() => {
+    if (!isNFTsFetching && newNFTIdRef.current) {
+      const n = allNFTs?.find((n) => n.id === newNFTIdRef.current);
+      if (!n) return;
+      setNewNFT(n);
+      setIsModalOpen(true);
+      newNFTIdRef.current = null;
+    }
+  }, [isNFTsFetching, allNFTs]);
 
   const handleAreaClick = (area: string) => {
     setSelectedArea(area);
@@ -65,10 +89,20 @@ export function CraftNFT() {
       );
 
       // Wait for the transaction to be commited to chain
-      await aptosClient().waitForTransaction({
+      const committedTransactionResponse = await aptosClient().waitForTransaction({
         transactionHash: response.hash,
       });
       await queryClient.invalidateQueries();
+
+      // Once the transaction has been successfully commited to chain,
+      if (committedTransactionResponse.success) {
+        const event = (committedTransactionResponse as UserTransactionResponse).events.find(
+          (e) => e.type === `${import.meta.env.VITE_MODULE_ADDRESS}::launchpad::CombineNftsEvent`,
+        );
+        if (event) {
+          newNFTIdRef.current = event.data.new_nft_obj.inner;
+        }
+      }
     } catch (error) {
       alert(error);
     } finally {
@@ -76,7 +110,7 @@ export function CraftNFT() {
     }
   };
 
-  const isSubmitDisabled = isUploading || !account || !selectedNFT1 || !selectedNFT2;
+  const isSubmitDisabled = isUploading || !account || !selectedNFT1 || !selectedNFT2 || !!newNFTIdRef.current;
 
   return (
     <>
@@ -117,7 +151,8 @@ export function CraftNFT() {
                 <Dialog.Content
                   className="fixed bg-white p-6 shadow-lg rounded-lg"
                   style={{
-                    maxWidth: "600px",
+                    width: "90%",
+                    maxWidth: newNFT ? "380px" : "600px",
                     maxHeight: "80%",
                     top: "50%",
                     left: "50%",
@@ -125,44 +160,65 @@ export function CraftNFT() {
                     overflow: "auto",
                   }}
                 >
-                  <Dialog.Title className="text-xl text-center mb-4 font-medium">Select an NFT</Dialog.Title>
-                  {isNFTsLoading || isNFTsPending ? (
-                    <div className="">Loading...</div>
-                  ) : !allNFTs || allNFTs.length === 0 ? (
-                    <div className="">No NFTs found</div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-4">
-                      {allNFTs.map((nft) => {
-                        const isDisabled =
-                          (selectedArea === "area1" && nft.id === selectedNFT2?.id) ||
-                          (selectedArea === "area2" && nft.id === selectedNFT1?.id);
-                        const isSelectedInSameArea =
-                          (selectedArea === "area1" && nft.id === selectedNFT1?.id) ||
-                          (selectedArea === "area2" && nft.id === selectedNFT2?.id);
+                  <Dialog.Title className="text-xl text-center mb-4 font-medium">
+                    {newNFT ? "New NFT Generated!" : "Select an NFT"}
+                  </Dialog.Title>
+                  <Dialog.Description></Dialog.Description>
 
-                        return (
-                          <div
-                            key={nft.id}
-                            className={`${isDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
-                            onClick={() => !isDisabled && handleNFTSelect(nft)}
-                          >
-                            <div
-                              className={`relative p-2 border ${isSelectedInSameArea ? "border-2 border-green-400" : ""}`}
-                            >
+                  {!newNFT && (
+                    <>
+                      {isNFTsLoading || !allNFTs ? (
+                        <div className="">Loading...</div>
+                      ) : allNFTs.length === 0 ? (
+                        <div className="">No NFTs found</div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-4">
+                          {allNFTs.map((nft) => {
+                            const isDisabled =
+                              (selectedArea === "area1" && nft.id === selectedNFT2?.id) ||
+                              (selectedArea === "area2" && nft.id === selectedNFT1?.id);
+                            const isSelectedInSameArea =
+                              (selectedArea === "area1" && nft.id === selectedNFT1?.id) ||
+                              (selectedArea === "area2" && nft.id === selectedNFT2?.id);
+
+                            return (
                               <div
-                                className={`w-full h-full object-cover  ${isDisabled ? "opacity-50 grayscale-[50%]" : ""}`}
+                                key={nft.id}
+                                className={`${isDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+                                onClick={() => !isDisabled && handleNFTSelect(nft)}
                               >
-                                <IpfsImage ipfsUri={nft.image} />
+                                <div
+                                  className={`relative p-2 border ${isSelectedInSameArea ? "border-2 border-green-400" : ""}`}
+                                >
+                                  <div
+                                    className={`w-full h-full object-cover  ${isDisabled ? "opacity-50 grayscale-[50%]" : ""}`}
+                                  >
+                                    <IpfsImage ipfsUri={nft.image} />
+                                  </div>
+                                  {isDisabled && <div className="absolute inset-0 bg-black opacity-80"></div>}
+                                </div>
+                                <p className={`text-center pt-2 ${isDisabled ? "opacity-50" : ""}`}>{nft.name}</p>
                               </div>
-                              {isDisabled && <div className="absolute inset-0 bg-black opacity-80"></div>}
-                            </div>
-                            <p className={`text-center pt-2 ${isDisabled ? "opacity-50" : ""}`}>{nft.name}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
-                  <div className="flex justify-between mt-8">
+
+                  {newNFT && (
+                    <>
+                      <div className="px-8 max-w-xs mx-auto">
+                        <NFTItem nft={newNFT} />
+                      </div>
+
+                      <p className="text-center mt-2 text-blue-500">
+                        <Link to={`/my-nfts`}>View your NFTs</Link>
+                      </p>
+                    </>
+                  )}
+
+                  <div className={`flex justify-between ${newNFT ? "mt-6" : "mt-8"}`}>
                     <Dialog.Close asChild>
                       <button className="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
                     </Dialog.Close>

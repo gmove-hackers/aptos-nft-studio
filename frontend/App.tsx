@@ -56,7 +56,7 @@ function App() {
   return (
     <>
       <div className="min-h-screen text-primary-foreground">
-        <div className="fixed w-full h-full pointer-events-none bg-bg bg-cover bg-center"></div>
+        <div className="fixed w-screen h-screen pointer-events-none bg-bg bg-cover bg-center"></div>
         <div className="relative">
           <RouterProvider router={router} />
         </div>

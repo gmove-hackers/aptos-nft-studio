@@ -1,6 +1,6 @@
 import { Container } from "@/components/Container";
 import { Header } from "@/components/Header";
-import { IpfsImage } from "@/components/IpfsImage";
+import { NFTItem } from "@/components/NFTItem";
 import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
 import { evolveNFT } from "@/entry-functions/evolve_nft";
@@ -8,13 +8,15 @@ import { useGetEvolutionRules } from "@/hooks/useGetEvolutionRules";
 import { CollectionWithNFTs, useGetOwnedNFTsByCollection } from "@/hooks/useGetOwnedNFTsByCollection";
 import { NFTModalContext, NFTWithCollectionData, useNFTModal } from "@/hooks/useNFTModal";
 import { aptosClient } from "@/utils/aptosClient";
+import { UserTransactionResponse } from "@aptos-labs/ts-sdk";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { useContext, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 export function EvolveNFT() {
-  const { data, isLoading } = useGetOwnedNFTsByCollection();
+  const { data, isLoading, isFetching } = useGetOwnedNFTsByCollection();
 
   const modalContext = useNFTModal();
   const { isModalOpen, nft } = modalContext;
@@ -22,6 +24,26 @@ export function EvolveNFT() {
   const { account, signAndSubmitTransaction } = useWallet();
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
+
+  // New NFT
+  const [newNFT, setNewNFT] = useState<NFTWithCollectionData | null>();
+  const newNFTIdRef = useRef<string | null>();
+  useEffect(() => {
+    if (!isModalOpen.state) {
+      setNewNFT(null);
+      newNFTIdRef.current = null;
+    }
+  }, [isModalOpen.state]);
+  useEffect(() => {
+    if (!isFetching && newNFTIdRef.current) {
+      const col = data?.find((c) => c.collection_id === nft.state?.collection_id);
+      if (!col) return;
+      const n = col.nfts.find((n) => n.id === newNFTIdRef.current);
+      if (!n) return;
+      setNewNFT({ ...n, collection: col });
+      newNFTIdRef.current = null;
+    }
+  }, [isFetching, data, nft.state]);
 
   // Evolve NFT
   const handleSubmit = async () => {
@@ -39,19 +61,28 @@ export function EvolveNFT() {
       );
 
       // Wait for the transaction to be commited to chain
-      await aptosClient().waitForTransaction({
+      const committedTransactionResponse = await aptosClient().waitForTransaction({
         transactionHash: response.hash,
       });
       await queryClient.invalidateQueries();
+
+      // Once the transaction has been successfully commited to chain,
+      if (committedTransactionResponse.success) {
+        const event = (committedTransactionResponse as UserTransactionResponse).events.find(
+          (e) => e.type === `${import.meta.env.VITE_MODULE_ADDRESS}::launchpad::EvolveNftEvent`,
+        );
+        if (event) {
+          newNFTIdRef.current = event.data.new_nft_obj.inner;
+        }
+      }
     } catch (error) {
       alert(error);
     } finally {
       setIsUploading(false);
-      isModalOpen.dispatch(false);
     }
   };
 
-  const isSubmitDisabled = isUploading || !account || !nft.state;
+  const isSubmitDisabled = isUploading || !account || !nft.state || !!newNFTIdRef.current;
 
   return (
     <>
@@ -79,7 +110,8 @@ export function EvolveNFT() {
             <Dialog.Content
               className="fixed bg-white p-6 shadow-lg rounded-lg"
               style={{
-                maxWidth: "600px",
+                width: "90%",
+                maxWidth: "380px",
                 maxHeight: "80%",
                 top: "50%",
                 left: "50%",
@@ -87,12 +119,21 @@ export function EvolveNFT() {
                 overflow: "auto",
               }}
             >
-              <Dialog.Title className="text-xl text-center mb-4 font-medium">Evolve this NFT?</Dialog.Title>
+              <Dialog.Title className="text-xl text-center mb-4 font-medium">
+                {newNFT ? "New NFT Generated!" : "Evolve this NFT?"}
+              </Dialog.Title>
+              <Dialog.Description></Dialog.Description>
 
-              {nft.state && (
-                <div className="px-8 max-w-xs">
-                  <NFTItem nft={nft.state} />
+              {(newNFT || nft.state) && (
+                <div className="px-8 max-w-xs mx-auto">
+                  <NFTItem nft={(newNFT || nft.state) as NFTWithCollectionData} />
                 </div>
+              )}
+
+              {newNFT && (
+                <p className="text-center mt-2 text-blue-500">
+                  <Link to={`/my-nfts`}>View your NFTs</Link>
+                </p>
               )}
 
               <div className="flex justify-between mt-6">
@@ -100,9 +141,11 @@ export function EvolveNFT() {
                   <button className="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
                 </Dialog.Close>
 
-                <Button variant="green" onClick={handleSubmit} disabled={isSubmitDisabled}>
-                  Execute
-                </Button>
+                {!newNFT && (
+                  <Button variant="green" onClick={handleSubmit} disabled={isSubmitDisabled}>
+                    Execute
+                  </Button>
+                )}
               </div>
             </Dialog.Content>
           </Dialog.Portal>
@@ -138,28 +181,6 @@ const NFTCollection = ({ collection }: { collection: CollectionWithNFTs }) => {
           })}
         </div>
       )}
-    </div>
-  );
-};
-
-const NFTItem = ({ nft, isButton }: { nft: NFTWithCollectionData; isButton?: boolean }) => {
-  const modalContext = useContext(NFTModalContext);
-
-  const onClick = () => {
-    if (isButton) {
-      modalContext.isModalOpen?.dispatch(true);
-      modalContext.nft?.dispatch(nft);
-    }
-  };
-
-  return (
-    <div onClick={onClick} className={`${isButton ? "cursor-pointer" : ""}`}>
-      <div className={`relative p-2 border `}>
-        <div className={`w-full h-full object-cover `}>
-          <IpfsImage ipfsUri={nft.image} />
-        </div>
-      </div>
-      <p className={`text-center pt-2 `}>{nft.name}</p>
     </div>
   );
 };

@@ -1,13 +1,9 @@
 import { useMemo } from "react";
 import { useGetCollections } from "./useGetCollections";
-import { NFT, useGetOwnedNFTs } from "./useGetOwnedNFTs";
-import { GetCollectionDataResponse } from "@aptos-labs/ts-sdk";
+import { useGetOwnedNFTs } from "./useGetOwnedNFTs";
+import { NFTWithCollectionData } from "./useNFTModal";
 
-export interface CollectionWithNFTs extends GetCollectionDataResponse {
-  nfts: NFT[];
-}
-
-export function useGetOwnedNFTsByCollection() {
+export function useGetOwnedNFTsWithCollectionData() {
   const { data: collections, isLoading: collectionsLoading } = useGetCollections();
   const {
     data: ownedNFTs,
@@ -19,21 +15,16 @@ export function useGetOwnedNFTsByCollection() {
   const data = useMemo(() => {
     if (!collections || !ownedNFTs) return undefined;
 
-    const groupedNFTs: CollectionWithNFTs[] = [];
+    const nfts: NFTWithCollectionData[] = [];
 
     ownedNFTs.forEach((nft) => {
       const collection = collections.find((c) => c.collection_id === nft.collection_id);
-      if (!collection) return;
-
-      const existingCollection = groupedNFTs.find((c) => c.collection_id === collection.collection_id);
-      if (existingCollection) {
-        existingCollection.nfts.push(nft);
-      } else {
-        groupedNFTs.push({ ...collection, nfts: [nft] });
+      if (collection) {
+        nfts.push({ ...nft, collection });
       }
     });
 
-    return groupedNFTs;
+    return nfts;
   }, [collections, ownedNFTs]);
 
   return {
