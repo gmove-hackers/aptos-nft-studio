@@ -9,17 +9,23 @@ import { WalletProvider } from "@/components/WalletProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+const IS_MAINTENANCE = true;
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <WalletProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider delayDuration={100}>
-          <App />
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </WalletProvider>
-  </React.StrictMode>,
+  IS_MAINTENANCE ? (
+    <></>
+  ) : (
+    <React.StrictMode>
+      <WalletProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider delayDuration={100}>
+            <App />
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </WalletProvider>
+    </React.StrictMode>
+  ),
 );
