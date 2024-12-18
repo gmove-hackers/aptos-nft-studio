@@ -1,123 +1,88 @@
-import { aptosClient } from "@/utils/aptosClient";
-import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { useEffect } from "react";
-import { ImageMetadata } from "@/utils/assetsUploader";
-import { IpfsImage } from "@/components/IpfsImage";
-import { getIpfsJsonContent } from "@/utils/getIpfsJsonContent";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGetCollections } from "@/hooks/useGetCollections";
-import { GetCollectionDataResponse } from "@aptos-labs/ts-sdk";
 import { Header } from "@/components/Header";
-
-interface NFT {
-  id: string;
-  collection_id: string;
-  name: string;
-  image: string;
-}
-
-interface Token {
-  current_token_data: {
-    collection_id: string;
-    token_name: string;
-    token_uri: string;
-    token_data_id: string;
-  };
-}
+import { PageTitle } from "@/components/PageTitle";
+import { Container } from "@/components/Container";
+import { useGetOwnedNFTsWithCollectionData } from "@/hooks/useGetOwnedNFTsWithCollectionData";
+import { NFTModalContext, useNFTModal } from "@/hooks/useNFTModal";
+import * as Dialog from "@radix-ui/react-dialog";
+import { NFTItem } from "@/components/NFTItem";
+import { Link } from "react-router-dom";
+import { NETWORK } from "@/constants";
 
 export function MyNFTs() {
-  const { account } = useWallet();
-  const queryClient = useQueryClient();
+  const { data, isLoading } = useGetOwnedNFTsWithCollectionData();
 
-  const collections: Array<GetCollectionDataResponse> = useGetCollections();
-
-  // fetch NFTs for the connected wallet
-  const nftsQuery = useQuery({
-    queryKey: ["nfts", account?.address],
-    queryFn: async () => {
-      if (!account) return [];
-
-      try {
-        // Fetch all tokens owned by the account using getAccountOwnedTokens
-        const tokens = (await aptosClient().getAccountOwnedTokens({ accountAddress: account.address })) as Token[];
-
-        if (!tokens || tokens.length === 0) {
-          return [];
-        }
-
-        // Filter tokens by collections
-        const filteredTokens = tokens.filter((token) =>
-          collections.some((collection) => collection.collection_id === token.current_token_data.collection_id),
-        );
-
-        // Fetch token data for each token (assuming standard format)
-        const fetchedNFTs: NFT[] = await Promise.all(
-          filteredTokens.map(async (token) => {
-            const { collection_id, token_name, token_uri, token_data_id } = token.current_token_data;
-
-            const metadata = (await getIpfsJsonContent(token_uri)) as ImageMetadata;
-
-            let image = metadata.image;
-
-            // If combined NFT, set the proper image
-            if (metadata.combinations) {
-              const combinedName = Object.keys(metadata.combinations).find((key) => key === token_name);
-              if (combinedName) {
-                const combinedMetadata = (await getIpfsJsonContent(
-                  metadata.combinations[combinedName],
-                )) as ImageMetadata;
-                image = combinedMetadata.image;
-              }
-            }
-
-            return {
-              id: token_data_id,
-              collection_id,
-              name: token_name,
-              image,
-            };
-          }),
-        );
-
-        return fetchedNFTs;
-      } catch (error) {
-        console.error("Failed to fetch NFTs:", error);
-        return [];
-      }
-    },
-  });
-
-  const allNFTs = nftsQuery.data || [];
-
-  useEffect(() => {
-    queryClient.invalidateQueries();
-  }, [account, queryClient, collections]);
+  const modalContext = useNFTModal();
+  const { isModalOpen, nft } = modalContext;
 
   return (
     <>
       <Header />
 
-      <div className="container mx-auto p-4 pb-16">
-        <h2 className="text-3xl text-center font-bold">View Your NFTs</h2>
-        <div className="bg-center bg-[length:120%] bg-no-repeat relative before:content-[''] before:block before:pt-[70.8%] lg:mt-[-3rem] md:mt-[-2rem] sm:mt-[-1rem]">
-          <div className="absolute w-full h-full top-0 left-0 pt-[22.4%]">
+      <NFTModalContext.Provider value={modalContext}>
+        <Container>
+          <PageTitle text={<>View Your NFTs</>} />
+          {isLoading || !data ? (
+            <div className="">Loading...</div>
+          ) : data.length === 0 ? (
+            <div className="">No NFTs found</div>
+          ) : (
             <div className="grid grid-cols-5 gap-4">
-              {allNFTs.map((nft) => {
-                return (
-                  <div key={nft.id}>
-                    <div className={`relative p-2 border `}>
-                      <div className={`w-full h-full object-cover `}>
-                        <IpfsImage ipfsUri={nft.image} />
-                      </div>
-                    </div>
-                    <p className={`text-center pt-2 `}>{nft.name}</p>
-                  </div>
-                );
+              {data.map((nft) => {
+                return <NFTItem key={nft.id} nft={nft} isButton />;
               })}
             </div>
-          </div>
-        </div>
-      </div>
+          )}
+        </Container>
+
+        <Dialog.Root open={isModalOpen.state} onOpenChange={isModalOpen.dispatch}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-black opacity-80" />
+            <Dialog.Content
+              className="fixed bg-white p-6 shadow-lg rounded-lg"
+              style={{
+                width: "90%",
+                maxWidth: "600px",
+                maxHeight: "80%",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                overflow: "auto",
+              }}
+            >
+              {nft.state && (
+                <>
+                  <div className="px-8 max-w-xs mx-auto">
+                    <NFTItem nft={nft.state} withoutName />
+                  </div>
+
+                  <div className="mt-4 py-2">
+                    <p className="mb-2 text-blue-500">
+                      <Link to={`/collection/${nft.state.collection_id}`}>{nft.state.collection.collection_name}</Link>
+                    </p>
+                    <Dialog.Title className="text-2xl font-medium">{nft.state.name}</Dialog.Title>
+                    <Dialog.Description className="mt-2">{nft.state.description}</Dialog.Description>
+                    <p className="text-sm break-all mt-1">
+                      <Link
+                        to={`https://explorer.aptoslabs.com/object/${nft.state.id}?network=${NETWORK}`}
+                        target="_blank"
+                        style={{ textDecoration: "underline" }}
+                      >
+                        {nft.state.id}
+                      </Link>
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-between mt-6">
+                <Dialog.Close asChild>
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
+                </Dialog.Close>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      </NFTModalContext.Provider>
     </>
   );
 }

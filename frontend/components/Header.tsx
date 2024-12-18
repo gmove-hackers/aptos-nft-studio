@@ -24,6 +24,10 @@ const NavList = [
     name: "Craft NFT",
     link: "/craft-nft",
   },
+  {
+    name: "Evolve NFT",
+    link: "/evolve-nft",
+  },
 ];
 
 export function Header() {

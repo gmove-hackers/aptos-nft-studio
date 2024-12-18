@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
  *
  */
 export function useGetCollections() {
-  const collectionsQuery = useQuery({
+  return useQuery({
     queryKey: ["collections"],
     queryFn: async () => {
       try {
@@ -24,12 +24,10 @@ export function useGetCollections() {
         return collections;
       } catch (error) {
         console.error("Error fetching collections:", error);
-        return [];
+        return null;
       }
     },
   });
-
-  return collectionsQuery.data || [];
 }
 
 const getRegistry = async () => {

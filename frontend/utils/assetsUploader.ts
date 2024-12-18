@@ -1,5 +1,6 @@
 import { create } from "ipfs-http-client";
 import { ImportCandidate } from "node_modules/ipfs-core-types/dist/src/utils";
+import { validateSequentialFilenames } from "./helpers";
 
 const projectId = "2Xi31agz7M8y7BuefMlhbswjv3L";
 const projectSecret = "1d72178ee211645564992adfd6ddc6f2";
@@ -14,27 +15,44 @@ export const ipfs = create({
   },
 });
 
-const VALID_MEDIA_EXTENSIONS = ["png", "jpg", "jpeg", "gltf"];
+// Define the features you want to handle
+export const FEATURES = [
+  {
+    name: "combination",
+    keyName: "combinations",
+  },
+  {
+    name: "evolution",
+    keyName: "evolutions",
+  },
+] as const;
+
+const VALID_MEDIA_EXTENSIONS = ["png", "jpg", "jpeg", "gltf"] as const;
+
 export type CollectionMetadata = {
   name: string;
   description: string;
   image: string;
   external_url: string;
 };
+
 type ImageAttribute = {
   trait_type: string;
   value: string;
 };
-type ImageCombination = {
-  [key: string]: string;
+
+type ImageFeatures = {
+  [feature in (typeof FEATURES)[number]["keyName"]]?: {
+    [key: string]: string;
+  };
 };
-export type ImageMetadata = {
+
+export type ImageMetadata = ImageFeatures & {
   name: string;
   description: string;
   image: string;
   external_url: string;
   attributes: ImageAttribute[];
-  combinations: ImageCombination;
 };
 
 export const uploadCollectionData = async (
@@ -75,7 +93,7 @@ export const uploadCollectionData = async (
       (file) =>
         file.name.endsWith("json") &&
         file.name !== "collection.json" &&
-        !file.name.toLowerCase().includes("combination"), // Exclude combination files
+        !FEATURES.some((feature) => file.name.toLowerCase().includes(feature.name)), // Exclude feature files
     )
     .sort((a, b) => {
       const getFileNumber = (file: File) => parseInt(file.name.replace(".json", ""), 10);
@@ -89,19 +107,14 @@ export const uploadCollectionData = async (
     throw new Error("Image metadata not found, please make sure you include the NFT json files");
   }
   // Validate that nftImageMetadatas filenames start from 1 and are sequential
-  nftImageMetadatas.forEach((file, index) => {
-    const fileNumber = parseInt(file.name.replace(".json", ""), 10);
-    if (fileNumber !== index + 1) {
-      throw new Error(`Filenames are not sequential. Expected ${index + 1}.json but found ${file.name}`);
-    }
-  });
+  validateSequentialFilenames(nftImageMetadatas, "json");
 
   const imageFiles = files
     .filter(
       (file) =>
         file.name.endsWith(`.${mediaExt}`) &&
         file.name !== collectionCover.name &&
-        !file.name.toLowerCase().includes("combination"), // Exclude combination files
+        !FEATURES.some((feature) => file.name.toLowerCase().includes(feature.name)), // Exclude feature files
     )
     .sort((a, b) => {
       const getFileNumber = (file: File) => parseInt(file.name.replace(`.${mediaExt}`, ""), 10);
@@ -118,51 +131,48 @@ export const uploadCollectionData = async (
     throw new Error("Mismatch between NFT metadata json files and images files");
   }
   // Validate that imageFiles filenames start from 1 and are sequential
-  imageFiles.forEach((file, index) => {
-    const fileNumber = parseInt(file.name.replace(`.${mediaExt}`, ""), 10);
-    if (fileNumber !== index + 1) {
-      throw new Error(`Image filenames are not sequential. Expected ${index + 1}.${mediaExt} but found ${file.name}`);
+  validateSequentialFilenames(imageFiles, mediaExt ?? "");
+
+  // Iterate over each feature to handle their metadata and image files
+  const featureData = FEATURES.map((feature) => {
+    const name = feature.name;
+
+    const featureMetadatas = files
+      .filter((file) => file.name.endsWith("json") && file.name.includes(name))
+      .sort((a, b) => {
+        const getFeatureNumber = (file: File) => parseInt(file.name.replace(name, "").replace(".json", ""), 10);
+
+        const numA = getFeatureNumber(a);
+        const numB = getFeatureNumber(b);
+
+        return numA - numB; // Sort by the numeric part of the feature filenames
+      });
+
+    const featureImageFiles = files
+      .filter((file) => file.name.endsWith(`.${mediaExt}`) && file.name.includes(name))
+      .sort((a, b) => {
+        const getFeatureNumber = (file: File) => parseInt(file.name.replace(name, "").replace(`.${mediaExt}`, ""), 10);
+
+        const numA = getFeatureNumber(a);
+        const numB = getFeatureNumber(b);
+
+        return numA - numB; // Sort by the numeric part of the feature filenames
+      });
+
+    // Validate feature filenames
+    if (featureMetadatas.length !== featureImageFiles.length) {
+      throw new Error(`Mismatch between ${name} metadata json files and images files`);
     }
-  });
+    if (featureMetadatas.length === 0) return null;
+    validateSequentialFilenames(featureMetadatas, "json", name);
+    validateSequentialFilenames(featureImageFiles, mediaExt ?? "", name);
 
-  // Handle combination files (combination1.json, combination2.json, etc.)
-  const combinationMetadatas = files
-    .filter((file) => file.name.endsWith("json") && file.name.includes("combination"))
-    .sort((a, b) => {
-      const getCombinationNumber = (file: File) =>
-        parseInt(file.name.replace("combination", "").replace(".json", ""), 10);
-
-      const numA = getCombinationNumber(a);
-      const numB = getCombinationNumber(b);
-
-      return numA - numB; // Sort by the numeric part of the combination filenames
-    });
-
-  const combinationImageFiles = files
-    .filter((file) => file.name.endsWith(`.${mediaExt}`) && file.name.includes("combination"))
-    .sort((a, b) => {
-      const getCombinationNumber = (file: File) =>
-        parseInt(file.name.replace("combination", "").replace(`.${mediaExt}`, ""), 10);
-
-      const numA = getCombinationNumber(a);
-      const numB = getCombinationNumber(b);
-
-      return numA - numB; // Sort by the numeric part of the combination filenames
-    });
-
-  if (combinationMetadatas.length !== combinationImageFiles.length) {
-    throw new Error("Mismatch between combination metadata json files and images files");
-  }
-
-  // Validate combination filenames
-  combinationMetadatas.forEach((file, index) => {
-    const fileNumber = parseInt(file.name.replace("combination", "").replace(".json", ""), 10);
-    if (fileNumber !== index + 1) {
-      throw new Error(
-        `Combination filenames are not sequential. Expected combination${index + 1}.json but found ${file.name}`,
-      );
-    }
-  });
+    return {
+      feature,
+      metadataFiles: featureMetadatas,
+      imagesFiles: featureImageFiles,
+    };
+  }).filter((v) => v !== null);
 
   // Upload images and metadata to IPFS
   // const ipfsUploads: { path: string; cid: string }[] = [];
@@ -178,26 +188,36 @@ export const uploadCollectionData = async (
   const updatedCollectionMetadata: CollectionMetadata = JSON.parse(await collectionMetadataFile.text());
   updatedCollectionMetadata.image = `ipfs://${imageFolderCid}`;
 
-  // Step 1: Upload combination files and store their CIDs
-  const combinationCidMap: ImageCombination = {};
+  // Step 1: Upload feature files and store their CIDs
+  // Initialize maps to hold CIDs for each feature
+  const featureCidMaps: ImageFeatures = {};
+  featureData.forEach((data) => {
+    featureCidMaps[data.feature.keyName] = {};
+  });
 
   await Promise.all(
-    combinationMetadatas.map(async (metadataFile, index) => {
-      const metadata: ImageMetadata = JSON.parse(await metadataFile.text());
-      const combinationImageFile = combinationImageFiles[index];
+    featureData.map(async (data) => {
+      const { feature, metadataFiles, imagesFiles } = data;
 
-      // Upload combination image file
-      const imageCid = await uploadFileToIpfs(combinationImageFile);
-      metadata.image = `ipfs://${imageCid}`;
+      await Promise.all(
+        metadataFiles.map(async (metadataFile, index) => {
+          const metadata: ImageMetadata = JSON.parse(await metadataFile.text());
+          const imageFile = imagesFiles[index];
 
-      // Upload combination metadata file
-      const updatedMetadataFile = new File([JSON.stringify(metadata)], `combination${index + 1}.json`, {
-        type: metadataFile.type,
-      });
-      const combinationCid = await uploadFileToIpfs(updatedMetadataFile);
-      combinationCidMap[metadata.name] = combinationCid;
+          // Upload feature image file
+          const imageCid = await uploadFileToIpfs(imageFile);
+          metadata.image = `ipfs://${imageCid}`;
 
-      filesToUpload.push({ path: `combination${index + 1}.json`, content: updatedMetadataFile });
+          // Upload feature metadata file
+          const updatedMetadataFile = new File([JSON.stringify(metadata)], `${feature.name}${index + 1}.json`, {
+            type: metadataFile.type,
+          });
+          const metadataCid = await uploadFileToIpfs(updatedMetadataFile);
+          featureCidMaps[feature.keyName]![metadata.name] = metadataCid;
+
+          filesToUpload.push({ path: `${feature.name}${index + 1}.json`, content: updatedMetadataFile });
+        }),
+      );
     }),
   );
 
@@ -211,14 +231,18 @@ export const uploadCollectionData = async (
       const imageCid = await uploadFileToIpfs(imageFile);
       metadata.image = `ipfs://${imageCid}`;
 
-      // Check for combinations and match the combination metadata with the uploaded combination CID
-      if (metadata.combinations) {
-        Object.keys(metadata.combinations).forEach((combinationKey) => {
-          if (combinationCidMap[combinationKey]) {
-            metadata.combinations[combinationKey] = `ipfs://${combinationCidMap[combinationKey]}`;
-          }
-        });
-      }
+      // Check for features and match the feature metadata with the uploaded feature CID
+      featureData.forEach((data) => {
+        const keyName = data.feature.keyName;
+        const metadataFeature = metadata[keyName];
+        if (metadataFeature) {
+          Object.keys(metadataFeature).forEach((featureKey) => {
+            if (featureCidMaps[keyName]![featureKey]) {
+              metadataFeature[featureKey] = `ipfs://${featureCidMaps[keyName]![featureKey]}`;
+            }
+          });
+        }
+      });
 
       // Create updated metadata file
       const updatedMetadataFile = new File([JSON.stringify(metadata)], `${index + 1}.json`, {

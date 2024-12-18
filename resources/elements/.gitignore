@@ -1,0 +1,11 @@
+# Ignore all .png and .json files
+*.png
+*.json
+
+# Exceptions in 'resources/sample_evolution_collection' directory
+!1.png
+!1.json
+!2.png
+!2.json
+!collection_cover.png
+!collection.json
