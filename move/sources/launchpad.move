@@ -648,8 +648,6 @@ module launchpad_addr::launchpad {
             ENFTS_RECIPIENTS_MISMATCH
         );
 
-        let sender_addr = signer::address_of(sender);
-        
         let stage_idx = &mint_stage::execute_earliest_stage(
             sender, collection_obj, vector::length(&recipient_addrs)
         );
@@ -762,7 +760,8 @@ module launchpad_addr::launchpad {
         };
 
         // Get collection object from first NFT
-        let collection_obj = token::collection_object(vector::borrow(&nft_objs, 0));
+        let first_nft = *vector::borrow(&nft_objs, 0);
+        let collection_obj = token::collection_object(first_nft);
 
         // Emit airdrop event
         event::emit(
