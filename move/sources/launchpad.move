@@ -48,6 +48,10 @@ module launchpad_addr::launchpad {
     const EDUPLICATE_EVOLUTION: u64 = 14;
     /// Only admin can add a new rule
     const EONLY_ADMIN_CAN_CREATE_RULE: u64 = 15;
+    /// Recipients list cannot be empty
+    const ERECIPIENTS_LIST_EMPTY: u64 = 16;
+    /// Number of NFTs must match number of recipients
+    const ENFTS_RECIPIENTS_MISMATCH: u64 = 17;
 
     /// Default mint fee per NFT denominated in oapt (smallest unit of APT, i.e. 1e-8 APT)
     const DEFAULT_MINT_FEE_PER_NFT: u64 = 0;
@@ -107,6 +111,22 @@ module launchpad_addr::launchpad {
         old_nft_obj: Object<Token>,
         new_nft_obj: Object<Token>,
         recipient_addr: address
+    }
+
+    #[event]
+    struct BatchMintAirdropNftsEvent has store, drop {
+        collection_obj: Object<Collection>,
+        nft_objs: vector<Object<Token>>,
+        recipient_addrs: vector<address>,
+        total_nfts: u64
+    }
+
+    #[event]
+    struct AirdropNftsEvent has store, drop {
+        collection_obj: Object<Collection>,
+        nft_objs: vector<Object<Token>>,
+        from_addr: address,
+        to_addrs: vector<address>
     }
 
     /// Unique per collection
@@ -610,6 +630,149 @@ module launchpad_addr::launchpad {
             EDUPLICATE_COMBINATION
         );
         simple_map::add(&mut combination_rules.results, new_rule, result_token);
+    }
+
+    /// Batch mint NFTs and immediately airdrop them to recipients
+    public entry fun batch_mint_airdrop_nfts(
+        sender: &signer,
+        token_names: vector<String>,
+        collection_obj: Object<Collection>,
+        recipient_addrs: vector<address>
+    ) acquires CollectionConfig, CollectionOwnerObjConfig, Config, CollectionNftCounter {
+        // Verify recipients list is not empty
+        assert!(!vector::is_empty(&recipient_addrs), ERECIPIENTS_LIST_EMPTY);
+        
+        // Verify number of token names matches number of recipients
+        assert!(
+            vector::length(&token_names) == vector::length(&recipient_addrs),
+            ENFTS_RECIPIENTS_MISMATCH
+        );
+
+        let sender_addr = signer::address_of(sender);
+        
+        let stage_idx = &mint_stage::execute_earliest_stage(
+            sender, collection_obj, vector::length(&recipient_addrs)
+        );
+        assert!(option::is_some(stage_idx), ENO_ACTIVE_STAGES);
+
+        let stage_obj =
+            mint_stage::find_mint_stage_by_index(
+                collection_obj, *option::borrow(stage_idx)
+            );
+        let stage_name = mint_stage::mint_stage_name(stage_obj);
+        let total_mint_fee = get_mint_fee(collection_obj, stage_name, vector::length(&recipient_addrs));
+        // Process payment after all validations
+        pay_for_mint(sender, total_mint_fee);
+
+        let nft_objs = vector[];
+        let total_nfts = vector::length(&recipient_addrs);
+
+        // Mint and transfer NFTs to each recipient
+        let i = 0;
+        while (i < total_nfts) {
+            let recipient = *vector::borrow(&recipient_addrs, i);
+            let token_name = *vector::borrow(&token_names, i);
+            
+            let nft_obj = mint_nft_internal(token_name, recipient, collection_obj);
+            vector::push_back(&mut nft_objs, nft_obj);
+            
+            i = i + 1;
+        };
+
+        // Emit airdrop event
+        event::emit(
+            BatchMintAirdropNftsEvent {
+                collection_obj,
+                nft_objs,
+                recipient_addrs,
+                total_nfts
+            }
+        );
+    }
+
+    /// Batch mint NFTs to the sender's address
+    public entry fun batch_mint_nfts(
+        sender: &signer,
+        token_names: vector<String>,
+        collection_obj: Object<Collection>
+    ) acquires CollectionConfig, CollectionOwnerObjConfig, Config, CollectionNftCounter {
+        let sender_addr = signer::address_of(sender);
+        
+        let stage_idx = &mint_stage::execute_earliest_stage(
+            sender, collection_obj, vector::length(&token_names)
+        );
+        assert!(option::is_some(stage_idx), ENO_ACTIVE_STAGES);
+
+        let stage_obj =
+            mint_stage::find_mint_stage_by_index(
+                collection_obj, *option::borrow(stage_idx)
+            );
+        let stage_name = mint_stage::mint_stage_name(stage_obj);
+        let total_mint_fee = get_mint_fee(collection_obj, stage_name, vector::length(&token_names));
+        // Process payment after all validations
+        pay_for_mint(sender, total_mint_fee);
+        
+        let nft_objs = vector[];
+        let total_nfts = vector::length(&token_names);
+
+        // Mint NFTs to sender
+        let i = 0;
+        while (i < total_nfts) {
+            let token_name = *vector::borrow(&token_names, i);
+            let nft_obj = mint_nft_internal(token_name, sender_addr, collection_obj);
+            vector::push_back(&mut nft_objs, nft_obj);
+            i = i + 1;
+        };
+
+        // Emit mint event
+        event::emit(
+            BatchMintNftsEvent {
+                collection_obj,
+                nft_objs,
+                recipient_addr: sender_addr,
+                total_mint_fee
+            }
+        );
+    }
+
+    /// Airdrop existing NFTs to recipients
+    /// Anyone can call this function to transfer their own NFTs
+    public entry fun airdrop_nfts(
+        sender: &signer,
+        nft_objs: vector<Object<Token>>,
+        recipient_addrs: vector<address>
+    ) {
+        let sender_addr = signer::address_of(sender);
+        
+        // Verify number of NFTs matches number of recipients
+        assert!(
+            vector::length(&nft_objs) == vector::length(&recipient_addrs),
+            ENFTS_RECIPIENTS_MISMATCH
+        );
+        
+        // Transfer each NFT to recipient
+        let i = 0;
+        while (i < vector::length(&nft_objs)) {
+            let nft_obj = *vector::borrow(&nft_objs, i);
+            let recipient_addr = *vector::borrow(&recipient_addrs, i);
+            // Verify sender owns the NFT
+            assert!(object::is_owner(nft_obj, sender_addr), 0);
+            object::transfer(sender, nft_obj, recipient_addr);
+            i = i + 1;
+        };
+
+        // Get collection object from first NFT
+        let collection_obj = token::collection_object(vector::borrow(&nft_objs, 0));
+
+        // Emit airdrop event
+        event::emit(
+            AirdropNftsEvent {
+                collection_obj,
+                nft_objs,
+                from_addr: sender_addr,
+                to_addrs: recipient_addrs
+            }
+        );
     }
 
     // ================================= View  ================================= //
@@ -1667,6 +1830,130 @@ module launchpad_addr::launchpad {
 
         add_evolution_rule(sender, collection, baby, big);
         add_evolution_rule(sender, collection, baby, big);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    #[test(
+        aptos_framework = @0x1, sender = @launchpad_addr, user1 = @0x200, user2 = @0x201
+    )]
+    fun test_batch_mint_airdrop(
+        aptos_framework: &signer,
+        sender: &signer,
+        user1: &signer,
+        user2: &signer
+    ) acquires Registry, Config, CollectionConfig, CollectionOwnerObjConfig, CollectionNftCounter {
+        let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(aptos_framework);
+        
+        let user1_addr = signer::address_of(user1);
+        let user2_addr = signer::address_of(user2);
+
+        timestamp::set_time_has_started_for_testing(aptos_framework);
+        account::create_account_for_test(user1_addr);
+        account::create_account_for_test(user2_addr);
+
+        init_module(sender);
+
+        // Create test collection
+        create_collection(
+            sender,
+            string::utf8(b"description"),
+            string::utf8(b"name"),
+            string::utf8(b"https://test.com/collection.json"),
+            10,
+            option::some(10),
+            option::some(vector[user1_addr]),
+            option::some(timestamp::now_seconds()),
+            option::some(timestamp::now_seconds() + 100),
+            option::some(3),
+            option::some(5),
+            option::some(timestamp::now_seconds() + 200),
+            option::some(timestamp::now_seconds() + 300),
+            option::some(2),
+            option::some(10)
+        );
+
+        let registry = get_registry();
+        let collection = *vector::borrow(&registry, 0);
+
+        // Test batch mint and airdrop
+        let recipients = vector[user1_addr, user2_addr];
+        let token_names = vector[
+            string::utf8(b"NFT1"),
+            string::utf8(b"NFT2")
+        ];
+        
+        batch_mint_airdrop_nfts(sender, token_names, collection, recipients);
+
+        // Verify NFTs were created and transferred
+        assert!(get_number_active_nfts(collection) == 2, 1);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    #[test(aptos_framework = @0x1, sender = @launchpad_addr, user1 = @0x200, user2 = @0x201)]
+    fun test_batch_mint_and_airdrop_separate(
+        aptos_framework: &signer,
+        sender: &signer,
+        user1: &signer,
+        user2: &signer
+    ) acquires Registry, Config, CollectionConfig, CollectionOwnerObjConfig, CollectionNftCounter {
+        let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(aptos_framework);
+        
+        let user1_addr = signer::address_of(user1);
+        let user2_addr = signer::address_of(user2);
+
+        timestamp::set_time_has_started_for_testing(aptos_framework);
+        account::create_account_for_test(user1_addr);
+        account::create_account_for_test(user2_addr);
+
+        init_module(sender);
+
+        // Create test collection
+        create_collection(
+            sender,
+            string::utf8(b"description"),
+            string::utf8(b"name"),
+            string::utf8(b"https://test.com/collection.json"),
+            10,
+            option::some(10),
+            option::some(vector[user1_addr]),
+            option::some(timestamp::now_seconds()),
+            option::some(timestamp::now_seconds() + 100),
+            option::some(3),
+            option::some(5),
+            option::some(timestamp::now_seconds() + 200),
+            option::some(timestamp::now_seconds() + 300),
+            option::some(2),
+            option::some(10)
+        );
+
+        let registry = get_registry();
+        let collection = *vector::borrow(&registry, 0);
+
+        // First batch mint NFTs to sender
+        let token_names = vector[
+            string::utf8(b"NFT1"),
+            string::utf8(b"NFT2")
+        ];
+        batch_mint_nfts(sender, token_names, collection);
+
+        // Get the minted NFTs
+        let nft_objs = collection::tokens(collection);
+        assert!(vector::length(&nft_objs) == 2, 1);
+
+        // Then airdrop them to user1 and user2
+        let recipient_addrs = vector[user1_addr, user2_addr];
+        airdrop_nfts(sender, nft_objs, recipient_addrs);
+
+        // Verify NFTs were transferred
+        let i = 0;
+        while (i < vector::length(&nft_objs)) {
+            assert!(object::is_owner(*vector::borrow(&nft_objs, i), *vector::borrow(&recipient_addrs, i)), 2);
+            i = i + 1;
+        };
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
