@@ -54,29 +54,42 @@ interface MintData {
 }
 
 async function getStartAndEndTime(collection_id: string): Promise<[start: Date, end: Date, isMintInfinite: boolean]> {
-  const mintStageRes = await aptosClient().view<[{ vec: [string] }]>({
-    payload: {
-      function: `${AccountAddress.from(MODULE_ADDRESS)}::launchpad::get_active_or_next_mint_stage`,
-      functionArguments: [collection_id],
-    },
-  });
+  try {
+    const mintStageRes = await aptosClient().view<[{ vec: [string] }]>({
+      payload: {
+        function: `${AccountAddress.from(MODULE_ADDRESS)}::launchpad::get_active_or_next_mint_stage`,
+        functionArguments: [collection_id],
+      },
+    });
 
-  const mintStage = mintStageRes[0].vec[0];
+    const mintStage = mintStageRes[0].vec[0];
 
-  const startAndEndRes = await aptosClient().view<[string, string]>({
-    payload: {
-      function: `${AccountAddress.from(MODULE_ADDRESS)}::launchpad::get_mint_stage_start_and_end_time`,
-      functionArguments: [collection_id, mintStage],
-    },
-  });
+    // Return default values if no mint stage is found
+    if (!mintStage) {
+      const now = new Date();
+      return [now, now, false];
+    }
 
-  const [start, end] = startAndEndRes;
-  return [
-    new Date(parseInt(start, 10) * 1000),
-    new Date(parseInt(end, 10) * 1000),
-    // isMintInfinite is true if the mint stage is 100 years later
-    parseInt(end, 10) === parseInt(start, 10) + 100 * 365 * 24 * 60 * 60,
-  ];
+    const startAndEndRes = await aptosClient().view<[string, string]>({
+      payload: {
+        function: `${AccountAddress.from(MODULE_ADDRESS)}::launchpad::get_mint_stage_start_and_end_time`,
+        functionArguments: [collection_id, mintStage],
+      },
+    });
+
+    const [start, end] = startAndEndRes;
+    return [
+      new Date(parseInt(start, 10) * 1000),
+      new Date(parseInt(end, 10) * 1000),
+      // isMintInfinite is true if the mint stage is 100 years later
+      parseInt(end, 10) === parseInt(start, 10) + 100 * 365 * 24 * 60 * 60,
+    ];
+  } catch (error) {
+    // Return default values if there's an error
+    console.error("Error getting mint stage times:", error);
+    const now = new Date();
+    return [now, now, false];
+  }
 }
 
 export function useGetCollectionData(collection_id: string = config.collection_id) {
