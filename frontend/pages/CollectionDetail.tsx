@@ -25,6 +25,7 @@ import * as Select from "@radix-ui/react-select";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useGetCollectionNFTsMetadata } from "@/hooks/useGetCollectionNFTsMetadata";
 import { removeMetadataNameDuplicates } from "@/utils/removeMetadataNameDuplicates";
+import { batchMintNFTs } from "@/entry-functions/batch_mint_nfts";
 
 export function CollectionDetail() {
   const { collection_id } = useParams<{ collection_id: string }>();
@@ -87,6 +88,7 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
   const { metadata, mintedNfts } = useGetCollectionDetailData(collection);
 
   const [isUploading, setIsUploading] = useState(false);
+  const [batchMintAmount, setBatchMintAmount] = useState<number>(1);
 
   // Mint amount
   // const [mintAmount, setMintAmount] = useState<number>();
@@ -433,6 +435,72 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
     );
   };
 
+  const executeBatchMintNfts = async () => {
+    try {
+      if (!account) throw new Error("Please connect your wallet");
+      if (!batchMintAmount) throw new Error("Please set the amount");
+      if (isUploading) throw new Error("Uploading in progress");
+      setIsUploading(true);
+
+      // Get the current number of minted NFTs
+      const totalMinted = await getNumberActiveNFTs({ collection_id: collection.collection_id });
+      const tokenNames: string[] = [];
+
+      // Fetch metadata for each token to be minted
+      for (let i = 0; i < batchMintAmount; i++) {
+        const nextTokenIndex = Number(totalMinted) + i + 1;
+        const cid = convertIpfsUriToCid(collection.uri).replace("/collection.json", "");
+        const tokenMetadataUrl = `${cid}/${nextTokenIndex}.json`;
+
+        // Fetch metadata from IPFS
+        const stream = ipfs.cat(tokenMetadataUrl);
+        const chunks: Uint8Array[] = [];
+
+        for await (const chunk of stream) {
+          chunks.push(chunk);
+        }
+
+        const contentBytes = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
+        let offset = 0;
+        for (const chunk of chunks) {
+          contentBytes.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        const contentText = new TextDecoder().decode(contentBytes);
+        const tokenMetadata: ImageMetadata = JSON.parse(contentText);
+
+        if (!tokenMetadata || !tokenMetadata.name) {
+          throw new Error(`Failed to retrieve token metadata or token name for token ${nextTokenIndex}`);
+        }
+
+        tokenNames.push(tokenMetadata.name);
+      }
+
+      // Submit batch_mint_nfts transaction
+      const response = await signAndSubmitTransaction(
+        batchMintNFTs({
+          tokenNames,
+          collectionId: collection.collection_id,
+        }),
+      );
+
+      // Wait for transaction
+      const committedTransactionResponse = await aptosClient().waitForTransaction({
+        transactionHash: response.hash,
+      });
+      await queryClient.invalidateQueries();
+
+      if (committedTransactionResponse.success) {
+        navigate(`/my-nfts`);
+      }
+    } catch (error) {
+      alert(error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <>
       <TableRow
@@ -485,6 +553,32 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
                   // className="ml-4"
                 >
                   Execute
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+          <TableRow className="hover:bg-inherit border-0">
+            <TableCell className="w-full" colSpan={4}>
+              <p className="mb-4 font-bold text-16">Batch Mint NFTs</p>
+              <div className="flex items-end">
+                <LabeledInput
+                  id={`${collection.collection_id}-batch-mint-amount`}
+                  required
+                  label="Number of NFTs to mint"
+                  tooltip="How many NFTs you want to mint in this batch."
+                  type="number"
+                  value={batchMintAmount}
+                  disabled={isUploading || !account}
+                  onChange={(e) => setBatchMintAmount(parseInt(e.target.value))}
+                  labelClassName="font-bold"
+                />
+                <Button
+                  variant="green"
+                  onClick={executeBatchMintNfts}
+                  disabled={isUploading || !account || !batchMintAmount || batchMintAmount < 1}
+                  className="ml-4"
+                >
+                  Batch Mint
                 </Button>
               </div>
             </TableCell>
