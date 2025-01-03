@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/Header";
 import { Container } from "@/components/Container";
 import { PageTitle } from "@/components/PageTitle";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 export function CreateCollection() {
   // Wallet Adapter provider
@@ -44,6 +45,17 @@ export function CreateCollection() {
 
   // Local Ref
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Add new state variables for allowlist
+  const [allowListStartDate, setAllowListStartDate] = useState<Date>();
+  const [allowListStartTime, setAllowListStartTime] = useState<string>();
+  const [allowListEndDate, setAllowListEndDate] = useState<Date>();
+  const [allowListEndTime, setAllowListEndTime] = useState<string>();
+  const [allowListLimitPerAccount, setAllowListLimitPerAccount] = useState<number>(1);
+  const [allowListFeePerNFT, setAllowListFeePerNFT] = useState<number>();
+  const [allowList, setAllowList] = useState<string[]>([]);
+  const [allowListInput, setAllowListInput] = useState<string>("");
+  const [isAllowListExpanded, setIsAllowListExpanded] = useState(false);
 
   // On publish mint start date selected
   const onPublicMintStartTime = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +83,43 @@ export function CreateCollection() {
     setPublicMintEndDate(publicMintEndDate);
   };
 
+  // Add handler for allowlist time changes
+  const onAllowListStartTime = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const timeValue = event.target.value;
+    setAllowListStartTime(timeValue);
+
+    const [hours, minutes] = timeValue.split(":").map(Number);
+
+    allowListStartDate?.setHours(hours);
+    allowListStartDate?.setMinutes(minutes);
+    allowListStartDate?.setSeconds(0);
+    setAllowListStartDate(allowListStartDate);
+  };
+
+  const onAllowListEndTime = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const timeValue = event.target.value;
+    setAllowListEndTime(timeValue);
+
+    const [hours, minutes] = timeValue.split(":").map(Number);
+
+    allowListEndDate?.setHours(hours);
+    allowListEndDate?.setMinutes(minutes);
+    allowListEndDate?.setSeconds(0);
+    setAllowListEndDate(allowListEndDate);
+  };
+
+  // Add handler for allowlist addresses
+  const handleAllowListAdd = () => {
+    if (allowListInput && !allowList.includes(allowListInput)) {
+      setAllowList([...allowList, allowListInput]);
+      setAllowListInput("");
+    }
+  };
+
+  const handleAllowListRemove = (address: string) => {
+    setAllowList(allowList.filter((item) => item !== address));
+  };
+
   // On create collection button clicked
   const onCreateCollection = async () => {
     try {
@@ -95,11 +144,11 @@ export function CreateCollection() {
           projectUri,
           maxSupply,
           royaltyPercentage,
-          allowList: undefined,
-          allowListStartDate: undefined,
-          allowListEndDate: undefined,
-          allowListLimitPerAccount: undefined,
-          allowListFeePerNFT: undefined,
+          allowList: allowList.length > 0 ? allowList : undefined,
+          allowListStartDate,
+          allowListEndDate,
+          allowListLimitPerAccount,
+          allowListFeePerNFT,
           publicMintStartDate,
           publicMintEndDate,
           publicMintLimitPerAccount,
@@ -188,6 +237,99 @@ export function CreateCollection() {
                   )}
                 </div>
               </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="cursor-pointer" onClick={() => setIsAllowListExpanded(!isAllowListExpanded)}>
+                <div className="flex items-center justify-between">
+                  <CardDescription>Allowlist Configuration (Optional)</CardDescription>
+                  {isAllowListExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+              </CardHeader>
+              {isAllowListExpanded && (
+                <CardContent className="space-y-4">
+                  <div className="flex item-center gap-4">
+                    <DateTimeInput
+                      id="allowlist-start"
+                      label="Allowlist start date"
+                      tooltip="When allowlist minting becomes active"
+                      disabled={isUploading || !account}
+                      date={allowListStartDate}
+                      onDateChange={setAllowListStartDate}
+                      time={allowListStartTime}
+                      onTimeChange={onAllowListStartTime}
+                      className="basis-1/2"
+                    />
+
+                    <DateTimeInput
+                      id="allowlist-end"
+                      label="Allowlist end date"
+                      tooltip="When allowlist minting finishes"
+                      disabled={isUploading || !account}
+                      date={allowListEndDate}
+                      onDateChange={setAllowListEndDate}
+                      time={allowListEndTime}
+                      onTimeChange={onAllowListEndTime}
+                      className="basis-1/2"
+                    />
+                  </div>
+
+                  <LabeledInput
+                    id="allowlist-limit"
+                    label="Allowlist mint limit per address"
+                    tooltip="How many NFTs an allowlisted address can mint"
+                    disabled={isUploading || !account}
+                    onChange={(e) => {
+                      setAllowListLimitPerAccount(parseInt(e.target.value));
+                    }}
+                  />
+
+                  <LabeledInput
+                    id="allowlist-fee"
+                    label="Allowlist mint fee per NFT in APT"
+                    tooltip="The fee for allowlist minting, denominated in APT"
+                    disabled={isUploading || !account}
+                    onChange={(e) => {
+                      setAllowListFeePerNFT(Number(e.target.value));
+                    }}
+                  />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="allowlist-addresses">Allowlist Addresses</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="allowlist-addresses"
+                        value={allowListInput}
+                        onChange={(e) => setAllowListInput(e.target.value)}
+                        placeholder="Enter Aptos address"
+                        disabled={isUploading || !account}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleAllowListAdd}
+                        disabled={isUploading || !account || !allowListInput}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {allowList.map((address) => (
+                        <div key={address} className="flex items-center justify-between bg-secondary p-2 rounded">
+                          <span className="text-sm truncate">{address}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAllowListRemove(address)}
+                            className="text-destructive"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              )}
             </Card>
 
             <div className="flex item-center gap-4 mt-4">
