@@ -26,6 +26,8 @@ import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useGetCollectionNFTsMetadata } from "@/hooks/useGetCollectionNFTsMetadata";
 import { removeMetadataNameDuplicates } from "@/utils/removeMetadataNameDuplicates";
 import { batchMintNFTs } from "@/entry-functions/batch_mint_nfts";
+import { airdropNFTs } from "@/entry-functions/airdrop_nfts";
+import { useGetOwnedNFTsForCollection } from "@/hooks/useGetOwnedNFTsForCollection";
 
 export function CollectionDetail() {
   const { collection_id } = useParams<{ collection_id: string }>();
@@ -501,6 +503,62 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
     }
   };
 
+  const [recipientAddresses, setRecipientAddresses] = useState<string[]>([""]);
+  const [selectedNFTs, setSelectedNFTs] = useState<string[]>([]);
+  const { data: ownedNFTs } = useGetOwnedNFTsForCollection(collection.collection_id);
+
+  const executeAirdropNfts = async () => {
+    try {
+      if (!account) throw new Error("Please connect your wallet");
+      if (selectedNFTs.length === 0) throw new Error("Please select NFTs to airdrop");
+      if (recipientAddresses.length === 0) throw new Error("Please add at least one recipient");
+      if (selectedNFTs.length !== recipientAddresses.length)
+        throw new Error("Number of NFTs must match number of recipients");
+      if (recipientAddresses.some((addr) => !addr)) throw new Error("Please fill in all recipient addresses");
+      if (isUploading) throw new Error("Transaction in progress");
+
+      setIsUploading(true);
+
+      const response = await signAndSubmitTransaction(
+        airdropNFTs({
+          nftObjects: selectedNFTs,
+          recipientAddresses: recipientAddresses,
+        }),
+      );
+
+      const committedResponse = await aptosClient().waitForTransaction({
+        transactionHash: response.hash,
+      });
+
+      await queryClient.invalidateQueries();
+
+      if (committedResponse.success) {
+        // Clear form
+        setSelectedNFTs([]);
+        setRecipientAddresses([""]);
+      }
+    } catch (error) {
+      alert(error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const addRecipientField = () => {
+    setRecipientAddresses([...recipientAddresses, ""]);
+  };
+
+  const removeRecipientField = (index: number) => {
+    setRecipientAddresses(recipientAddresses.filter((_, i) => i !== index));
+    setSelectedNFTs(selectedNFTs.filter((_, i) => i !== index));
+  };
+
+  const updateRecipientAddress = (index: number, value: string) => {
+    const newAddresses = [...recipientAddresses];
+    newAddresses[index] = value;
+    setRecipientAddresses(newAddresses);
+  };
+
   return (
     <>
       <TableRow
@@ -580,6 +638,84 @@ const CollectionRow = ({ collection, isDetail }: CollectionRowProps) => {
                 >
                   Batch Mint
                 </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+          <TableRow className="hover:bg-inherit border-0">
+            <TableCell className="w-full" colSpan={4}>
+              <div className="max-w-2xl">
+                <p className="mb-4 font-bold text-16">Airdrop NFTs</p>
+                {ownedNFTs && ownedNFTs.length > 0 ? (
+                  <>
+                    {recipientAddresses.map((address, index) => (
+                      <div key={index} className="flex items-end gap-4 mb-4">
+                        <div className="flex-1">
+                          <LabeledInput
+                            id={`recipient-${index}`}
+                            required
+                            label={`Recipient Address ${index + 1}`}
+                            tooltip="The wallet address that will receive this NFT"
+                            value={address}
+                            onChange={(e) => updateRecipientAddress(index, e.target.value)}
+                            disabled={isUploading}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <select
+                            className="w-full p-2 border rounded"
+                            value={selectedNFTs[index] || ""}
+                            onChange={(e) => {
+                              const newSelected = [...selectedNFTs];
+                              newSelected[index] = e.target.value;
+                              setSelectedNFTs(newSelected);
+                            }}
+                            disabled={isUploading}
+                          >
+                            <option value="">Select NFT</option>
+                            {ownedNFTs.map((nft) => (
+                              <option key={nft.id} value={nft.id} disabled={selectedNFTs.includes(nft.id)}>
+                                {nft.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {index > 0 && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => removeRecipientField(index)}
+                            disabled={isUploading}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex gap-4 mt-4">
+                      <Button
+                        variant="outline"
+                        onClick={addRecipientField}
+                        disabled={isUploading || recipientAddresses.length >= ownedNFTs.length}
+                      >
+                        Add Recipient
+                      </Button>
+                      <Button
+                        variant="green"
+                        onClick={executeAirdropNfts}
+                        disabled={
+                          isUploading ||
+                          !account ||
+                          selectedNFTs.length === 0 ||
+                          selectedNFTs.length !== recipientAddresses.length ||
+                          recipientAddresses.some((addr) => !addr)
+                        }
+                      >
+                        Airdrop NFTs
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p>You don't own any NFTs from this collection to airdrop</p>
+                )}
               </div>
             </TableCell>
           </TableRow>
