@@ -9,7 +9,7 @@ import { WalletProvider } from "@/components/WalletProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const IS_MAINTENANCE = true;
+const IS_MAINTENANCE = false;
 
 const queryClient = new QueryClient();
 
