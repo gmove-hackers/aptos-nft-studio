@@ -4,15 +4,15 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-launchpad_addr = "0x434b7c236d75fb9414ca8638020df5fefef089abd9e8319f5ace21b113348437"
-initial_creator_addr = "0x434b7c236d75fb9414ca8638020df5fefef089abd9e8319f5ace21b113348437"
-minter = "0x3c41ff6b5845e0094e19888cba63773591be9de59cafa9e582386f6af15dd490"
+launchpad_addr = "0xefaa812487ed801bd1cdb0d755f5d30bf20e83fd71d17f2cb464151eeccf3349"
+initial_creator_addr = "0xefaa812487ed801bd1cdb0d755f5d30bf20e83fd71d17f2cb464151eeccf3349"
+minter = "0xe7d2d16ae4a8beac787245f98e1601b58b54ca77faa06c5948551baf0bc2a2ea"
 minter_aptos = "0x3c41ff6b5845e0094e19888cba63773591be9de59cafa9e582386f6af15dd490"
 minter_movement = "0xd56e9211aa484538b9b6c518e1fcfc14908eb7a6f819a3eb8a6826245f913e24"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
-AptosTokenObjects = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-token-objects" }
+AptosFramework = { git = "https://github.com/movementlabsxyz/aptos-core.git", rev = "movement", subdir = "aptos-move/framework/aptos-framework" }
+AptosTokenObjects = { git = "https://github.com/movementlabsxyz/aptos-core.git", rev = "movement", subdir = "aptos-move/framework/aptos-token-objects" }
 TokenMinter = { git = "https://github.com/aptos-labs/token-minter.git", rev = "main", subdir = "token-minter" }
 
 [dev-dependencies]
