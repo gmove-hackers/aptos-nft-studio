@@ -43,11 +43,12 @@ const getObjects = async (registry: [{ inner: string }]) => {
   const objects = await Promise.all(
     registry.map(async (register: { inner: string }) => {
       const formattedRegistry = AccountAddress.from(register.inner).toString();
-      const object = await aptosClient().getObjectDataByObjectAddress({
-        objectAddress: formattedRegistry,
+      const object = await aptosClient().getAccountResource({
+        accountAddress: formattedRegistry,
+        resourceType: "0x1::object::ObjectCore",
       });
 
-      return object.owner_address;
+      return object.owner;
     }),
   );
   return objects;
