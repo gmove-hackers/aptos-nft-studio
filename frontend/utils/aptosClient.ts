@@ -6,6 +6,8 @@ const aptos = new Aptos(
     network: NETWORK,
     fullnode: "https://full.mainnet.movementinfra.xyz/v1",
     indexer: "https://indexer.mainnet.movementnetwork.xyz/v1/graphql",
+    // fullnode: "https://full.testnet.movementinfra.xyz/v1",
+    // indexer: "https://indexer.testnet.movementnetwork.xyz",
   }),
 );
 
