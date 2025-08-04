@@ -1,19 +1,166 @@
-import { create } from "ipfs-http-client";
 import { ImportCandidate } from "node_modules/ipfs-core-types/dist/src/utils";
 import { validateSequentialFilenames } from "./helpers";
 
-const projectId = "2Xi31agz7M8y7BuefMlhbswjv3L";
-const projectSecret = "1d72178ee211645564992adfd6ddc6f2";
+// Get Pinata credentials from environment variables
+const pinataJWT = import.meta.env.VITE_PINATA_JWT;
 
-// Configure the IPFS client
-export const ipfs = create({
-  host: "ipfs.infura.io", // You can use Infura or your own IPFS node
-  port: 5001,
-  protocol: "https",
-  headers: {
-    authorization: "Basic " + Buffer.from(projectId + ":" + projectSecret).toString("base64"),
+if (!pinataJWT) {
+  throw new Error("VITE_PINATA_JWT environment variable is required");
+}
+
+// Pinata API client
+const pinataUpload = async (file: File | Blob, filename?: string): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", file, filename);
+
+  const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${pinataJWT}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Pinata upload failed: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  return result.IpfsHash;
+};
+
+// Pinata folder upload for multiple files - compatible with ipfs-http-client behavior  
+const pinataUploadFolder = async (files: { path: string; content: File | Blob }[]): Promise<{ results: { path: string; cid: string }[]; directoryCid: string }> => {
+  // Upload each file individually first
+  const results: { path: string; cid: string }[] = [];
+
+  for (const { path, content } of files) {
+    const hash = await pinataUpload(content, path);
+    results.push({ path, cid: hash });
+  }
+
+  // Since Pinata doesn't support true directory structures like IPFS,
+  // we'll use the last uploaded file's CID as the "directory" CID
+  // This is a limitation but maintains API compatibility
+  const directoryCid = results[results.length - 1]?.cid || "";
+  
+  return { results, directoryCid };
+};
+
+// Get Pinata gateway URL from environment or use default
+const pinataGateway = import.meta.env.VITE_PINATA_GATEWAY || "gateway.pinata.cloud";
+
+// Create compatibility layer for existing ipfs-http-client usage
+export const ipfs = {
+  add: async (
+    file: File | { path: string; content: File },
+    path?: string,
+  ): Promise<{ cid: { toString: () => string } }> => {
+    if (file instanceof File) {
+      const hash = await pinataUpload(file, path || file.name);
+      return { cid: { toString: () => hash } };
+    } else {
+      // Handle object with path and content
+      const hash = await pinataUpload(file.content, file.path);
+      return { cid: { toString: () => hash } };
+    }
   },
-});
+  addAll: async function* (
+    files: ImportCandidate[],
+    options?: { wrapWithDirectory?: boolean },
+  ): AsyncGenerator<{ cid: { toString: () => string }; path?: string }> {
+    const formattedFiles = files.map((file) => {
+      if (typeof file === "string") {
+        // Handle string content
+        return {
+          path: "file",
+          content: new File([file], "file"),
+        };
+      } else if (file instanceof File || file instanceof Blob) {
+        // Handle File/Blob content
+        return {
+          path: file instanceof File ? file.name || "file" : "file",
+          content: file instanceof File ? file : new File([file], "file"),
+        };
+      } else if (typeof file === "object" && file !== null) {
+        // Handle object with path and content
+        const path = "path" in file ? file.path || "file" : "file";
+        let content: File;
+
+        if ("content" in file && file.content) {
+          if (file.content instanceof File || file.content instanceof Blob) {
+            content = file.content instanceof File ? file.content : new File([file.content], path);
+          } else if (typeof file.content === "string") {
+            content = new File([file.content], path);
+          } else {
+            content = new File([new Uint8Array(file.content as any)], path);
+          }
+        } else {
+          content = new File([""], path);
+        }
+
+        return { path, content };
+      } else {
+        // Fallback
+        return {
+          path: "file",
+          content: new File([String(file)], "file"),
+        };
+      }
+    });
+
+    const { results, directoryCid } = await pinataUploadFolder(formattedFiles);
+    
+    // Yield individual file results first (like ipfs-http-client does)
+    for (const result of results) {
+      yield { 
+        cid: { toString: () => result.cid },
+        path: result.path
+      };
+    }
+    
+    // If wrapWithDirectory is true, yield the directory CID last
+    if (options?.wrapWithDirectory) {
+      yield { 
+        cid: { toString: () => directoryCid }
+      };
+    }
+  },
+  cat: async function* (cid: string): AsyncGenerator<Uint8Array> {
+    // Fetch content from Pinata gateway
+    const url = `https://${pinataGateway}/ipfs/${cid}`;
+    
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from IPFS: ${response.statusText}`);
+      }
+      
+      // Get the response body as a ReadableStream and convert to async iterable
+      const reader = response.body?.getReader();
+      
+      if (!reader) {
+        throw new Error('No response body available');
+      }
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+          
+          yield value;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      console.error(`Error fetching IPFS content for CID ${cid}:`, error);
+      throw error;
+    }
+  },
+};
 
 // Define the features you want to handle
 export const FEATURES = [
